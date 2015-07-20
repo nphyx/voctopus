@@ -1,0 +1,48 @@
+{
+	"name":"@nphyx/voctopus",
+	"version":"0.0.1",
+	"repository":"https://github.com/nphyx/voctopus",
+	"description":"An experimental implementation of Sparse Voxel Octrees in javascript.",
+	"author":"Justen Robertson <nphyxx@gmail.com>",
+	"main":"",
+	"scripts": {
+		"doc":"jsdoc -c doc/conf.json -d doc"
+	},
+  "dependencies": {
+	},
+	"devDependencies": {
+		"mocha":"*",
+		"should":"*",
+		"chai":"*",
+		"sinon":"*",
+		"jsdoc":"*",
+		"jshint":"*"
+	},
+	"jshintConfig": {
+		"curly":false,
+		"latedef":true,
+		"newcap":true,
+		"quotmark":"double",
+		"undef":true,
+		"unused":true,
+		"globalstrict":true,
+		"asi":true,
+		"esnext":true,
+		"browser":true,
+		"devel":true,
+		"node":true,
+		"worker":true,
+		"globals":{
+			"mocha":false,
+			"chai":false,
+			"describe":false,
+			"define":false,
+			"it":false,
+			"before":false,
+			"beforeEach":false,
+			"after":false,
+			"afterEach":false
+		}
+	},
+	"license":"MIT"
+}
