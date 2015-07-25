@@ -149,13 +149,17 @@ function voctopusUpdateTree(_elements, _updateQueue, _md) {
  * @see Voctopus#getVoxel
  * Curried to Voctopus.getVoxel(v)
  */
-function voctopusGetVoxel(_elements, v) {
+function voctopusGetVoxel(_elements, _md, v) {
 	/* jshint validthis:true */
+	var val;
 	var d = 0;
-	if(arguments.length === 3) d = arguments[3];
-	var val = _elements[this.octKey(v, d)];
-	if(isUndef(this.getVoxel(v, d+1))) return val; 
-	return val;
+	if(arguments.length === 4) d = arguments[3];
+	// walk down the tree until we hit an undefined value
+	if(d < _md) {
+		val = this.getVoxel(v, d+1);
+		if(!isUndef(val)) return val; 
+	}
+	return _elements[this.octKey(v, d)]; 
 }
 
 /**
@@ -260,7 +264,7 @@ function Voctopus(depth) {
 	 * octet at d+1, indicating that octet is uniform with the octet value at d
 	 * @param v {vector} voxel coordinate
 	 */
-	this.getVoxel = voctopusGetVoxel.bind(this, _elements);
+	this.getVoxel = voctopusGetVoxel.bind(this, _elements, _md);
 
 	/**
 	 * Sets the value of a voxel, then flags the node for pruning. If you're modifying

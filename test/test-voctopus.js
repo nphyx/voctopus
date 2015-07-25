@@ -179,8 +179,32 @@ describe("voctopus", function() {
 		// parents should be set
 		isUndef(voc._elements[1]).should.be.false();
 		voc._elements[1].should.equal(1);
-
+	});
+	it("should retrieve a voxel using getVoxel after it has been set", function() {
 		// check a bigger volume just for shits and giggles
 		voc = new Voctopus(3);
+		voc.setVoxel([0,8,23], 3);
+		voc.getVoxel([0,8,23]).should.equal(3);
+	});
+	it("should retrieve the correct value for a voxel in a branch that has been pruned", function() {
+		voc = new Voctopus(3);
+		voc.setVoxels([
+			[[0,0,0], 1],
+			[[1,0,0], 1],
+			[[0,1,0], 1],
+			[[1,1,0], 1],
+			[[0,0,1], 1],
+			[[1,0,1], 1],
+			[[0,1,1], 1],
+			[[1,1,1], 1]
+		]);
+		voc.getVoxel([0,0,0]).should.equal(1);
+		voc.getVoxel([1,0,0]).should.equal(1);
+		voc.getVoxel([0,1,0]).should.equal(1);
+		voc.getVoxel([1,1,0]).should.equal(1);
+		voc.getVoxel([0,0,1]).should.equal(1);
+		voc.getVoxel([1,0,1]).should.equal(1);
+		voc.getVoxel([0,1,1]).should.equal(1);
+		voc.getVoxel([1,1,1]).should.equal(1);
 	});
 });
