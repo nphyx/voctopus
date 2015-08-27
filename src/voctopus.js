@@ -68,23 +68,71 @@ function Voctant(buffer, offset) {
 	return dv;
 }
 
-function VoctopusCursor(buffer) {
+/**
+ * Using a factory here because inheriting from a DataView is a pain in the ass.
+ */
+function voctopusCursorFactory(buffer) {
 	var dv = new DataView(buffer, 0, buffer.byteLength);
+	/**
+	 * @property position {int internal position variable. Transparently multiplied an divided by 16 in accessor methods
+	 */
+	var position = 0;
 	Object.defineProperty(dv, "position", {
-		value:0,
+		set:function(p) {position = p << 4;},
+		get:function() {return position >>> 4;},
 		enumerable:false
 	});
-	Object.defineProperty(dv, "value", {
+	Object.defineProperty(dv, "color", {
 		get:function() {
-			return new Voctant(this.buffer, this.position);
+			var rgb = new Uint8Array(3);
+			rgb[0] = this.getUint8(position+0);
+			rgb[1] = this.getUint8(position+1);
+			rgb[2] = this.getUint8(position+2);
+			return rgb;
+		},
+		set:function(rgb) {
+			this.setInt8(position+0, rgb[0]);
+			this.setInt8(position+1, rgb[1]);
+			this.setInt8(position+2, rgb[2]);
+			return this;
 		}
 	});
+	Object.defineProperty(dv, "r", {
+		get:function() {return this.getUint8(position+0);},
+		set:function(r) {this.setInt8(position+0, r); return this;}
+	});
+	Object.defineProperty(dv, "g", {
+		get:function() {return this.getUint8(position+1);},
+		set:function(g) {this.setInt8(position+1, g); return this;}
+	});
+	Object.defineProperty(dv, "b", {
+		get:function() {return this.getUint8(position+2);},
+		set:function(b) {this.setInt8(position+2, b); return this;}
+	});
+	Object.defineProperty(dv, "material", {
+		get:function() {return this.getUint8(position+3);},
+		set:function(i) {this.setInt8(position+3, i); return this;}
+	});
+	Object.defineProperty(dv, "pointer", {
+		get:function() {return this.getUint32(position+4);},
+		set:function(p) {this.setUint32(position+4, p); return this;}
+	});
+	Object.defineProperty(dv, "sum", {
+		get:function() {var color = this.color; return color[0]+color[1]+color[2]+this.material;}
+	});
+	dv.next = function() {
+		this.position += 1;
+		return this;
+	}
+	return dv;
 }
 
 /**
  * Quick definition of terms:
  * 1 octant = one voxel at a given depth
  * 1 octant = 8 octants, or one tree node
+ *
+ * TODO: Deal with endianness in buffer
  */
 function Voctopus(depth) {
 	if(depth > 12) throw new Error("Temporary dev limit: depth must be less than 12");
@@ -147,7 +195,8 @@ function Voctopus(depth) {
 	/**
 	 * DataView spanning the entire buffer, for quick initialization of octets.
 	 */
-	this.dv = new DataView(this.buffer, 0, this.buffer.length);
+	//this.dv = new DataView(this.buffer, 0, this.buffer.length);
+	this.cursor = voctopusCursorFactory(this.buffer);
 }
 
 /**
@@ -209,11 +258,13 @@ Voctopus.prototype.prune = function() {
 Voctopus.prototype.allocate = function(v, d) {
 	var i, id, key, vox, newIndex, keyOfFirst, oldLength;
 	if(isUndef(d)) d = this.depth;
+	/*
 	key = this.voctantKey(v, d);
 	vox = this.voctants[key];
+	*/
 	// if the voctant is already allocated just return it
 	// this lets us use allocate naively
-	if(!isUndef(vox)) return vox;
+	//if(!isUndef(vox)) return vox;
 	newIndex = 0;
 	if(this.freed.length) newIndex = this.freed.shift(); // take from top of stack
 	else newIndex = this.buffer.nextIndex;
@@ -267,8 +318,8 @@ Voctopus.prototype.expand = function() {
 	tmp.nextIndex = parseInt(this.buffer.nextIndex);
 	tmp.version = this.buffer.version+1;
 	this.buffer = tmp;
-	this.dv = new DataView(this.buffer, 0, this.buffer.length);
-	return tmp;
+	this.cursor = voctopusCursorFactory(this.buffer);
+	return this;
 }
 
 Voctopus.prototype.deallocate = function(d, v) {
@@ -301,17 +352,19 @@ Voctopus.prototype.getValue = function(v, d) {
  * Traverses the octree to position vector v and depth d.
  * @param v {vector} vector
  * @param d {int} depth to traverse to (should be between 0 and tree depth)
+ * @param p {int} starting cursor position (should be the first offset of an octet)
  */
-Voctopus.prototype.traverse = function(v, d) {
-	var val;
-	var pos = 0;
+Voctopus.prototype.traverse = function(v, d, p) {
+	var val, newVal;
+	if(isUndef(p)) p =  0;
 	// sanity checks
 	if(isUndef(d)) d = this.depth;
-	else if(d > this.depth) d = this.depth;
-	this.cursor.position = 0;
-	do {
-	}
-	while(d > 0);
+	this.cursor.position = p;
+	if(this.cursor.pointer === 0) return this.cursor;
+	p = this.cursor.pointer + this.voctantId(v, d);
+	console.log(this.cursor.pointer);
+	newVal = this.traverse(v, d-1, p);
+	return this.cursor;
 }
 
 /**
@@ -374,12 +427,13 @@ Voctopus.prototype.parentOfKey = function(key) {
  *
  */
 Voctopus.prototype.initializeOctet = function(o) {
-	var i;
+	var i = 0;
 	var s = 128;
-	for(i = 0; i < s; i++) this.dv.setUint8(o+i, 0);
+	for(i = 0; i < s; i++) this.cursor.setUint8(o+i, 0);
 }
 
 if(typeof(module) !== "undefined") {
 	module.exports.Voctant = Voctant;
 	module.exports.Voctopus = Voctopus;
+	module.exports.voctopusCursorFactory = voctopusCursorFactory;
 }

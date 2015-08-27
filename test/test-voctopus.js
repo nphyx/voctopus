@@ -2,6 +2,7 @@
 require("should");
 var Voctopus = require("../src/voctopus").Voctopus;
 var Voctant = require("../src/voctopus").Voctant;
+var voctopusCursorFactory = require("../src/voctopus").voctopusCursorFactory;
 
 describe("voctant", function() {
 	var buf = new ArrayBuffer(64); // use a small buffer for testing
@@ -38,6 +39,52 @@ describe("voctant", function() {
 	});
 	it("should properly find a sum", function() {
 		var vt = new Voctant(buf, 0);
+		vt.sum.should.equal(255+128+64+13);
+	});
+
+});
+
+describe("VoctopusCursor", function() {
+	var buf = new ArrayBuffer(146); // use a small buffer for testing
+	it("should support all its interfaces", function() {
+		var vt = voctopusCursorFactory(buf);
+		vt.hasOwnProperty("position").should.be.true();
+		vt.hasOwnProperty("color").should.be.true();
+		vt.hasOwnProperty("material").should.be.true();
+		vt.hasOwnProperty("pointer").should.be.true();
+		vt.hasOwnProperty("sum").should.be.true();
+		(typeof(vt.getUint8)).should.equal("function");
+		(typeof(vt.setUint8)).should.equal("function");
+		// if it supports those it's probably supporting all the DV interfaces
+	});
+	it("should set and get its position", function() {
+		var vt = voctopusCursorFactory(buf);
+		vt.position = 2;
+		vt.position.should.equal(2);
+	});
+	it("should properly set and get colors", function() {
+		var vt = voctopusCursorFactory(buf);
+		vt.color = [255,128,64];
+		vt.color.should.eql(new Uint8Array([255,128,64]));
+		vt.r.should.equal(255);
+		vt.g.should.equal(128);
+		vt.b.should.equal(64);
+		// what if we try another view
+		var vt2 = new Voctant(buf, 0);
+		vt2.color.should.eql(new Uint8Array([255,128,64]));
+	});
+	it("should properly set and get materials", function() {
+		var vt = voctopusCursorFactory(buf);
+		vt.material = 13;
+		vt.material.should.equal(13);
+	});
+	it("should properly set and get child pointers", function() {
+		var vt = voctopusCursorFactory(buf);
+		vt.pointer = 1234567890;
+		vt.pointer.should.equal(1234567890);
+	});
+	it("should properly find a sum", function() {
+		var vt = voctopusCursorFactory(buf);
 		vt.sum.should.equal(255+128+64+13);
 	});
 
@@ -217,11 +264,19 @@ describe("voctopus", function() {
 		voc.allocate([0,0,2]);
 		Object.keys(voc.voctants).should.have.length(49);
 	});
+	it("should traverse an octree", function() {
+		var voc, vox, val;
+		voc = new Voctopus(3);
+		vox = voc.allocate([7,4,5]);
+		vox.r = 24;
+		val = voc.traverse([7,4,5], d);
+		val.r.should.equal(24);
+	});
 	it("should set child keys on parents when initializing a voctant", function() {
 		var voc = new Voctopus(3);
 		var vox = voc.allocate([0,0,0]);
 	});
-	it("should expand the buffer when neccessary", function() {
+	it("should expand the buffer during allocation when neccessary", function() {
 		var x, y, z;
 		var voc = new Voctopus(4);
 		voc.buffer.byteLength.should.equal(146);
