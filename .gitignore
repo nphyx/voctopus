@@ -8,6 +8,7 @@
 *.so
 node_modules
 dist
+coverage
 
 # Packages #
 ############

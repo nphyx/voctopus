@@ -14,7 +14,10 @@ function sump8(n) {
 }
 
 /**
- * DataView for a Voctant.
+ * DataView for a Voctant with 1-byte r,g,b and m values and a 4-byte pointer.
+ * @param buffer {ArrayBuffer} the buffer to operate on (should be a Voctopus' buffer)
+ * @param offset {int} offset from beginning of buffer for the Octant
+ * @param writable {bool} if true, values can be changed; if false, view only
  */
 function Voctant(buffer, offset, writable = false) {
 	var dv = new DataView(buffer, offset, 16);
@@ -58,67 +61,21 @@ function Voctant(buffer, offset, writable = false) {
 		get:function() {return this.getUint32(4);},
 		set:function(p) {if(this.writable) this.setUint32(4, p);}
 	});
-	return dv;
-}
-
-/**
- * Using a factory here because inheriting from a DataView is a pain in the ass.
- */
-function voctopusCursorFactory(buffer) {
-	var dv = new DataView(buffer, 0, buffer.byteLength);
 	/**
-	 * @property position {int internal position variable. Transparently multiplied an divided by 8 in accessor methods
+	 * Convenience function for setting multiple properties at once by passing
+	 * an object.
 	 */
-	var position = 0;
-	Object.defineProperty(dv, "position", {
-		set:function(p) {position = p << 3;},
-		get:function() {return position >>> 3;},
-		enumerable:false
-	});
-	Object.defineProperty(dv, "color", {
-		get:function() {
-			var rgb = new Uint8Array(3);
-			rgb[0] = this.getUint8(position+0);
-			rgb[1] = this.getUint8(position+1);
-			rgb[2] = this.getUint8(position+2);
-			return rgb;
-		},
-		set:function(rgb) {
-			this.setInt8(position+0, rgb[0]);
-			this.setInt8(position+1, rgb[1]);
-			this.setInt8(position+2, rgb[2]);
-			return this;
-		}
-	});
-	Object.defineProperty(dv, "r", {
-		get:function() {return this.getUint8(position+0);},
-		set:function(r) {this.setInt8(position+0, r); return this;}
-	});
-	Object.defineProperty(dv, "g", {
-		get:function() {return this.getUint8(position+1);},
-		set:function(g) {this.setInt8(position+1, g); return this;}
-	});
-	Object.defineProperty(dv, "b", {
-		get:function() {return this.getUint8(position+2);},
-		set:function(b) {this.setInt8(position+2, b); return this;}
-	});
-	Object.defineProperty(dv, "material", {
-		get:function() {return this.getUint8(position+3);},
-		set:function(i) {this.setInt8(position+3, i); return this;}
-	});
-	Object.defineProperty(dv, "pointer", {
-		get:function() {return this.getUint32(position+4);},
-		set:function(p) {this.setUint32(position+4, p); return this;}
-	});
-	Object.defineProperty(dv, "sum", {
-		get:function() {var color = this.color; return color[0]+color[1]+color[2]+this.material;}
-	});
-	dv.next = function() {
-		this.position += 1;
-		return this;
+	dv.setProps = function(p) {
+		if(!isUndef(p.r)) this.r = p.r;
+		if(!isUndef(p.g)) this.g = p.g;
+		if(!isUndef(p.b)) this.b = p.b;
+		if(!isUndef(p.material)) this.material = p.material;
+		if(!isUndef(p.pointer)) this.pointer = p.pointer;
 	}
 	return dv;
 }
+// total size of a single octant in bytes
+Voctant.prototype.octantSize = 8;
 
 /**
  * Quick definition of terms:
@@ -128,7 +85,13 @@ function voctopusCursorFactory(buffer) {
  * TODO: Deal with endianness in buffer
  */
 function Voctopus(depth) {
-	var buffer = new ArrayBuffer(Math.max(146, sump8(depth)/4));
+	// figure out the maximum number of bytes to allocate initially -
+	// it must be at most the maximum length, and at least 146 or maximum length/4,
+	// whichever is higher, times 8 (because each Octant is 8 bytes long)
+	var buffer = new ArrayBuffer(Math.min(sump8(depth), Math.max(146, sump8(depth)/4))*8);
+	var cursor = 0;
+	var nextOctet = Voctant.prototype.octantSize;
+	this.octetSize = Voctant.prototype.octantSize*8; // later on we'll allow different octant formats by passing a constructor as an option 
  
 	/* jshint unused:false */
 	Object.defineProperty(this, "freedOctets", {
@@ -136,7 +99,8 @@ function Voctopus(depth) {
 		enumerable: false
 	});
 	Object.defineProperty(this, "nextOctet", {
-		value: 0,
+		get: () => nextOctet,
+		set: (v) => nextOctet = v,
 		enumerable: false
 	});
 	this.depth = depth;
@@ -188,22 +152,24 @@ Voctopus.prototype.getVoxel = function(v) {
 	return vox;
 }
 
-Voctopus.prototype.setVoxel = function(v) {
-	let d = 0;
+Voctopus.prototype.setVoxel = function(v, p) {
+	let d = 0, o = 0;
 	this.cursor = 0; // reset cursor to root node 
 	// walk the tree til we reach the end of a branch, and return a view
 	while(d < this.depth) {
+		let vox = new Voctant(this.buffer, this.cursor, true);
 		// move to the correct octant
 		o = this.octantOffset(v, d);
 		this.cursor += this.octantOffset(v, d);
 		// find the child pointer
-		if(this.cursor.pointer === 0) {
-			this.cursor.pointer = this.nextEmptyOctet();
+		if(this.cursor === 0 && d < this.depth) {
+			this.cursor = this.getEmptyOctet();
+			vox.pointer = this.cursor;
 		}
-		this.cursor.pointer = this.cursor.pointer;
 		d++;
 	}
-	var vox = new Voctant(this.buffer, this.cursor.pointer+this.octantOffset(v, d));
+	var vox = new Voctant(this.buffer, this.cursor+this.octantOffset(v, d), true);
+	vox.setProps(p);
 }
 
 /**
@@ -235,12 +201,12 @@ Voctopus.prototype.prune = function() {
  * @param this.depth {int} max depth of tree
  */
 Voctopus.prototype.expand = function() {
-	var sumx2 = sump8(this.depth)*2;
+	var sumx8 = sump8(this.depth)*8;
 	// derive last sparse factor from current this.buffer length, then decrement it
-	var s = ~~(sumx2/this.buffer.byteLength)-1;
+	var s = ~~(sumx8/this.buffer.byteLength)-1;
 	// don't divide by zero, that would be bad
 	if(s < 1) throw new Error("tried to expand a voctopus, but it's already at maximum size - this means something has gone horribly wrong!");
-	var tmp = new ArrayBuffer(sumx2/s);
+	var tmp = new ArrayBuffer(sumx8/s);
 	// we can't rely on ArrayBuffer.transfer yet so let's do this the crappy way
 	for(var i = 0; i < this.buffer.byteLength; i++) tmp[i] = this.buffer[i];
 	tmp.nextIndex = parseInt(this.buffer.nextIndex);
@@ -257,8 +223,11 @@ Voctopus.prototype.expand = function() {
  */
 Voctopus.prototype.initializeOctet = function(o) {
 	var i = 0;
-	var s = 128;
-	for(i = 0; i < s; i++) this.cursor.setUint8(o+i, 0);
+	var s = this.octetSize;
+	var v = new DataView(this.buffer, o);
+	for(i = 0; i < s; i++) {
+		v.setUint8(i, 0); 
+	}
 }
 
 /**
@@ -266,7 +235,7 @@ Voctopus.prototype.initializeOctet = function(o) {
  * @param v global coordinate of voxel 
  * @param d depth to check
  */
-Voctopus.prototype.octantIdentity = function(v, d) {
+Voctopus.prototype.octantOffset = function(v, d) {
 	d = this.depth - d;
 	return (((v[2] >>> d) & 1) << 2 | 
 					((v[1] >>> d) & 1) << 1 |
@@ -280,6 +249,4 @@ Voctopus.prototype.octantIdentity = function(v, d) {
 if(typeof(module) !== "undefined") {
 	module.exports.Voctant = Voctant;
 	module.exports.Voctopus = Voctopus;
-	module.exports.voctopusCursorFactory = voctopusCursorFactory;
 }
-
