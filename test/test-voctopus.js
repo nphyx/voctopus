@@ -97,6 +97,25 @@ describe("voctopus", function() {
 		//(typeof(voc.deallocate)).should.equal("function");
 		//(typeof(voc.voctants)).should.equal("object", "method voctants");
 	});
+	it("should correctly calculate the maximum size for a Voctopus", function() {
+		var voxSize = Voctant.prototype.octantSize;
+		voc = new Voctopus(1);
+		voc.maxSize().should.eql(9*voxSize);
+		voc = new Voctopus(2);
+		voc.maxSize().should.eql(73*voxSize);
+		voc = new Voctopus(3);
+		voc.maxSize().should.eql(585*voxSize);
+		voc = new Voctopus(4);
+		voc.maxSize().should.eql(4681*voxSize);
+		voc = new Voctopus(5);
+		voc.maxSize().should.eql(37449*voxSize);
+		voc = new Voctopus(6);
+		voc.maxSize().should.eql(299593*voxSize);
+		voc = new Voctopus(7);
+		voc.maxSize().should.eql(2396745*voxSize);
+		voc = new Voctopus(8);
+		voc.maxSize().should.eql(19173961*voxSize);
+	});
 	it("should always return 0 at depth 0 for octantOffset", function() {
 		voc.octantOffset([ 0, 0, 0], 0).should.equal(0);
 		voc.octantOffset([31, 0, 0], 0).should.equal(0);
@@ -107,83 +126,135 @@ describe("voctopus", function() {
 		voc.octantOffset([ 0,31,31], 0).should.equal(0);
 		voc.octantOffset([31,31,31], 0).should.equal(0);
 	});
-	it("should yield expected octant offsets (range 0-7) for a position vector", function() {
+	it("should yield expected octant offsets (range 0-7 * octantSize) for a position vector", function() {
 		var i;
 		// These should have the same identity at any depth
 		for(i = 1; i < d; i++) {
-			voc.octantOffset([ 0, 0, 0], i).should.equal(0);
-			voc.octantOffset([31, 0, 0], i).should.equal(1);
-			voc.octantOffset([ 0,31, 0], i).should.equal(2);
-			voc.octantOffset([31,31, 0], i).should.equal(3);
-			voc.octantOffset([ 0, 0,31], i).should.equal(4);
-			voc.octantOffset([31, 0,31], i).should.equal(5);
-			voc.octantOffset([ 0,31,31], i).should.equal(6);
-			voc.octantOffset([31,31,31], i).should.equal(7);
+			voc.octantOffset([ 0, 0, 0], i).should.equal(0*voc.octantSize);
+			voc.octantOffset([31, 0, 0], i).should.equal(1*voc.octantSize);
+			voc.octantOffset([ 0,31, 0], i).should.equal(2*voc.octantSize);
+			voc.octantOffset([31,31, 0], i).should.equal(3*voc.octantSize);
+			voc.octantOffset([ 0, 0,31], i).should.equal(4*voc.octantSize);
+			voc.octantOffset([31, 0,31], i).should.equal(5*voc.octantSize);
+			voc.octantOffset([ 0,31,31], i).should.equal(6*voc.octantSize);
+			voc.octantOffset([31,31,31], i).should.equal(7*voc.octantSize);
 		}
-		// for d == 2, coordinates corresponding to octet 8 at d == 1)
+		// for d == 2, coordinates corresponding to octet voc.octantSize at d == 1)
 		for(i = 2; i < d; i++) {
-			voc.octantOffset([ 0, 0, 0], 2).should.equal(0);
-			voc.octantOffset([15, 0, 0], 2).should.equal(1);
-			voc.octantOffset([ 0,15, 0], 2).should.equal(2);
-			voc.octantOffset([15,15, 0], 2).should.equal(3);
-			voc.octantOffset([ 0, 0,15], 2).should.equal(4);
-			voc.octantOffset([15, 0,15], 2).should.equal(5);
-			voc.octantOffset([ 0,15,15], 2).should.equal(6);
-			voc.octantOffset([15,15,15], 2).should.equal(7);
+			voc.octantOffset([ 0, 0, 0], 2).should.equal(0*voc.octantSize);
+			voc.octantOffset([15, 0, 0], 2).should.equal(1*voc.octantSize);
+			voc.octantOffset([ 0,15, 0], 2).should.equal(2*voc.octantSize);
+			voc.octantOffset([15,15, 0], 2).should.equal(3*voc.octantSize);
+			voc.octantOffset([ 0, 0,15], 2).should.equal(4*voc.octantSize);
+			voc.octantOffset([15, 0,15], 2).should.equal(5*voc.octantSize);
+			voc.octantOffset([ 0,15,15], 2).should.equal(6*voc.octantSize);
+			voc.octantOffset([15,15,15], 2).should.equal(7*voc.octantSize);
 		}
 	});
 	it("should generate a buffer of the correct length", function() {
-		voc = new Voctopus(3); // Voctopus of depth 3 should be 73 octants long, or 146 bytes 
-		voc.buffer.byteLength.should.equal(584);
-		voc = new Voctopus(4); // Maximum length of an unexpanded buffer is 146
-		voc.buffer.byteLength.should.equal(1170);
-		voc = new Voctopus(8); // A fully dense octree of depth 8 would be 19173960 bytes, but it should cap out at a quarter of that
-		voc.buffer.byteLength.should.equal(4793490);
+		// should make a buffer of max size if the max size is less than 73*octantSize
+		let voc = new Voctopus(1);
+		voc.buffer.byteLength.should.equal(9*voc.octantSize);
+		// anything larger than this should start out at a quarter of the max size
+		for(var i = 2; i < 10; i++) {
+			voc = new Voctopus(i);
+			voc.buffer.byteLength.should.eql(voc.maxSize()/4, "buffer is one quarter of max length "+voc.maxSize());
+		}
+		// until we implement nested octrees 9 will be the max size for the RGBMP Voctant
+		var fun = () => new Voctopus(i);
+		for(i = 10; i < 16; i++) {
+			(fun).should.throwError();
+		}
 	});
 	it("should expand the buffer using expand", function() {
-		var voc = new Voctopus(4);
-		voc.buffer.byteLength.should.equal(1170);
-		voc.expand();
-		voc.buffer.byteLength.should.equal(1560);
-		voc.expand();
-		voc.buffer.byteLength.should.equal(2340);
-		voc.expand();
-		voc.buffer.byteLength.should.equal(4680);
-		(function() {voc.expand()}).should.throwError();
+		var i, voc, ms;
+		for(i = 3; i < 8; i++) {
+			voc = null;
+			voc = new Voctopus(i);
+			ms = voc.maxSize();
+			voc.buffer.byteLength.should.equal(~~(ms/4));
+			voc.expand();
+			voc.buffer.byteLength.should.equal(~~(ms/3));
+			voc.expand();
+			voc.buffer.byteLength.should.equal(~~(ms/2));
+			voc.expand();
+			voc.buffer.byteLength.should.equal(ms);
+			(function() {voc.expand()}).should.throwError();
+		}
 	});
-	it("should set voxel data at the right position", function() {
-		var voc = new Voctopus(2);
-		var v = [0,0,0];
-		voc.cursor = 0;
+	it("should set voxel data at the right position with setVoxel", function() {
 		// this should make a tree going down to 0,0
-		voc.setVoxel(v, {r:31,g:63,b:255,material:1});
+		voc.setVoxel([0,0,0], {r:31,g:63,b:255,material:1});
 		// look at the raw data, since we haven't yet tested getVoxel
 		let dv = new DataView(voc.buffer);
 		dv.getUint32(4).should.eql(8, "root octant's pointer is pointing at the right offset");
-		dv.getUint8(8).should.eql(31, "voxel's r value is correct");
-		dv.getUint8(9).should.eql(63, "voxel's b value is correct");
-		dv.getUint8(10).should.eql(255, "voxel's g value is correct");
-		dv.getUint8(11).should.eql(1, "voxel's material value is correct");
-		dv.getUint32(12).should.eql(0, "voxel's pointer value is correct");
+		dv.getUint32(12).should.eql(72, "octant's pointer at depth 1 is pointing at the right offset");
+		dv.getUint32(76).should.eql(136, "octant's pointer at depth 2 is pointing at the right offset");
+		dv.getUint32(140).should.eql(200, "octant's pointer at depth 3 is pointing at the right offset");
+		dv.getUint32(204).should.eql(264, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint8(264).should.eql(31, "voxel's r value is correct");
+		dv.getUint8(265).should.eql(63, "voxel's g value is correct");
+		dv.getUint8(266).should.eql(255, "voxel's b value is correct");
+		dv.getUint8(267).should.eql(1, "voxel's material value is correct");
+		dv.getUint32(268).should.eql(0, "voxel's pointer value is correct");
 	});
-	it("should get voxel data after setting it", function() {
-		var v = [0,0,0];
-		voc.setVoxel(v, {r:31,g:63,b:255,material:1});
-		let vox = voc.getVoxel(v);
+	it("should get voxel data after setting it using getVoxel", function() {
+		var x, y, z, i, vox;
+		var voc = new Voctopus(8);
+		this.timeout(20000);
+		var time = new Date().getTime();
+		for(x = 0; x < 32; x++) {
+			for(y = 0; y < 32; y++) {
+				i = 0; // max = 256, so repeat it for each x coord (32x32=256)
+				for(z = 0; z < 32; z++) {
+					voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
+					i++;
+				}
+			}
+		}
+		time = new Date().getTime() - time;
+		console.log("Time to populate:",time/1000+"s");
+
+		time = new Date().getTime();
+		for(x = 0; x < 32; x++) {
+			for(y = 0; y < 32; y++) {
+				i = 0; // max = 256, so repeat it for each x coord (32x32=256)
+				for(z = 0; z < 32; z++) {
+					vox = voc.getVoxel([x,y,z]);
+					vox.should.have.property("r", i);
+					vox.should.have.property("g", i);
+					vox.should.have.property("b", i);
+					vox.should.have.property("material", i);
+					i++;
+				}
+			}
+		}
+		time = new Date().getTime() - time;
+		console.log("Time to check:",time/1000+"s");
+
+	});
+	if(0) {
+	it("should initialize an octet's data to zero using initializeOctet", function() {
+		// set the voxel first so we're grabbing the right data with getVoxel
+		voc.setVoxel([0,0,0], {r:31,g:63,b:127,material:12});
+		// don't assume it got set correctly
+		let vox = voc.getVoxel([0,0,0]);
 		vox.should.have.property("r", 31);
 		vox.should.have.property("g", 63);
-		vox.should.have.property("b", 255);
-		vox.should.have.property("material", 1);
-	});
-	it("should initialize an octet to zero", function() {
-		var voc = new Voctopus(2);
-		let vox = voc.getVoxel([0,0,0]);
-		voc.setVoxel([0,0,0], {r:31,g:63,b:127,material:12});
-		// offsets 0-7 are the root octet, so start at 8 and wipe 64 (the length of an octet)
-		voc.initializeOctet(8); // initialize the octet beginning at offset 1, which is the second down from root octant
+		vox.should.have.property("b", 127);
+		vox.should.have.property("material", 12);
+		// the tree was empty so the start of the leaf octet should be 264 for a tree of depth 5 (calculated externally) 
+		voc.initializeOctet(264); // initialize the octet beginning at offset 1, which is the second down from root octant
 		vox.should.have.property("r", 0);
 		vox.should.have.property("g", 0);
 		vox.should.have.property("b", 0);
 		vox.should.have.property("material", 0);
 	});
+	it("should prune redundant branches using prune", function() {
+		let x = 0, y = 0, z = 0, i = 0, vox = null;
+		for(; x < 32; x++) for(; y < 32; y++) for(; z < 32; z++) {
+			voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
+		}
+	});
+	}
 });
