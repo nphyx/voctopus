@@ -1,82 +1,7 @@
 "use strict";
 require("should");
 var Voctopus = require("../src/voctopus").Voctopus;
-var Voctant = require("../src/voctopus").Voctant;
 
-describe("voctant", function() {
-	var buf;
-	beforeEach("set up a clean buffer", function() {
-		buf = new ArrayBuffer(64); // use a small buffer for testing
-	});
-	it("should support all its interfaces", function() {
-		var vt = new Voctant(buf, 0);
-		vt.hasOwnProperty("writable").should.be.true("property writable");
-		vt.writable.should.be.false();
-		vt.hasOwnProperty("color").should.be.true("property color");
-		vt.hasOwnProperty("material").should.be.true("property material");
-		vt.hasOwnProperty("pointer").should.be.true("property pointer");
-		(typeof(vt.setProps)).should.equal("function", "method setProps");
-		// if it supports these it's probably supporting all the DV interfaces
-		(typeof(vt.getUint8)).should.equal("function", "method getUint8");
-		(typeof(vt.setUint8)).should.equal("function", "method setUint8");
-		vt = new Voctant(buf, 0, true);
-		vt.writable.should.be.true();
-	});
-	it("should properly set and get colors", function() {
-		var vt = new Voctant(buf, 0, true);
-		vt.r = 1;
-		vt.g = 2;
-		vt.b = 3;
-		vt.r.should.eql(1);
-		vt.g.should.eql(2);
-		vt.b.should.eql(3);
-		vt.color = [255,128,64];
-		vt.color.should.eql(new Uint8Array([255,128,64]));
-		vt.r.should.equal(255);
-		vt.g.should.equal(128);
-		vt.b.should.equal(64);
-		// what if we try another view
-		var vt2 = new Voctant(buf, 0);
-		vt2.color.should.eql(new Uint8Array([255,128,64]));
-	});
-	it("should properly set and get materials", function() {
-		var vt = new Voctant(buf, 0, true);
-		vt.material = 13;
-		vt.material.should.equal(13);
-	});
-	it("should properly set and get child pointers", function() {
-		var vt = new Voctant(buf, 0, true);
-		vt.pointer = 1234567890;
-		vt.pointer.should.equal(1234567890);
-	});
-	it("should support setProps with any combination of properties", function() {
-		var vt = new Voctant(buf, 0, true);
-		vt.setProps({r:1});
-		vt.setProps({g:2});
-		vt.setProps({b:3});
-		vt.setProps({r:6, b:7});
-		vt.setProps({material:4});
-		vt.setProps({pointer:5});
-		vt.setProps({material:8, g:9});
-		vt.r.should.eql(6);
-		vt.g.should.eql(9);
-		vt.b.should.eql(7);
-		vt.material.should.eql(8);
-		vt.pointer.should.eql(5);
-	});
-	it("should prevent writing to a voxel if the voxel is not writable", function() {
-		var vt = new Voctant(buf, 0, false);
-		vt.setProps({r:1,g:2,b:3,material:4,pointer:5});
-		vt.r.should.eql(0);
-		vt.g.should.eql(0);
-		vt.b.should.eql(0);
-		vt.material.should.eql(0);
-		vt.pointer.should.eql(0);
-		vt.color = [1,2,3];
-		vt.color.should.eql(new Uint8Array([0,0,0]));
-	});
-
-});
 describe("voctopus", function() {
 	var d, voc;
 	beforeEach("set up a clean voctopus instance", function() {
@@ -97,8 +22,21 @@ describe("voctopus", function() {
 		//(typeof(voc.deallocate)).should.equal("function");
 		//(typeof(voc.voctants)).should.equal("object", "method voctants");
 	});
+	it("should implement octant schemas", function() {
+		var prop;
+		// default schema: RGBM
+		for(prop of voc.schema) {
+			prop.should.have.property("label");
+			prop.should.have.property("offset");
+			prop.should.have.property("length");
+		}
+		(voc.schema.find((el) => el.label === "pointer") === "undefined").should.be.false();
+		voc.octantSize.should.equal(8);
+		voc.octetSize.should.equal(64);
+		voc.nextOctet.should.equal(72);
+	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
-		var voxSize = Voctant.prototype.octantSize;
+		var voxSize = voc.octantSize;
 		voc = new Voctopus(1);
 		voc.maxSize().should.eql(9*voxSize);
 		voc = new Voctopus(2);
@@ -183,10 +121,11 @@ describe("voctopus", function() {
 		}
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
+		var dv;
 		// this should make a tree going down to 0,0
 		voc.setVoxel([0,0,0], {r:31,g:63,b:255,material:1});
+		dv = voc.view;
 		// look at the raw data, since we haven't yet tested getVoxel
-		let dv = new DataView(voc.buffer);
 		dv.getUint32(4).should.eql(8, "root octant's pointer is pointing at the right offset");
 		dv.getUint32(12).should.eql(72, "octant's pointer at depth 1 is pointing at the right offset");
 		dv.getUint32(76).should.eql(136, "octant's pointer at depth 2 is pointing at the right offset");
@@ -199,62 +138,52 @@ describe("voctopus", function() {
 		dv.getUint32(268).should.eql(0, "voxel's pointer value is correct");
 	});
 	it("should get voxel data after setting it using getVoxel", function() {
-		var x, y, z, i, vox;
-		var voc = new Voctopus(8);
-		this.timeout(20000);
-		var time = new Date().getTime();
-		for(x = 0; x < 32; x++) {
-			for(y = 0; y < 32; y++) {
-				i = 0; // max = 256, so repeat it for each x coord (32x32=256)
-				for(z = 0; z < 32; z++) {
-					voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
-					i++;
-				}
-			}
-		}
-		time = new Date().getTime() - time;
-		console.log("Time to populate:",time/1000+"s");
-
+		var max, x, y, z, i, index, vox, time, count = 0;
+		max = 16;
 		time = new Date().getTime();
-		for(x = 0; x < 32; x++) {
-			for(y = 0; y < 32; y++) {
-				i = 0; // max = 256, so repeat it for each x coord (32x32=256)
-				for(z = 0; z < 32; z++) {
+		for(x = 0; x < max; x++) {
+			for(y = 0; y < max; y++) {
+				i = 0; // max = 256, so repeat it for each y coord
+				for(z = 0; z < max; z++) {
+					index = voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
+					i++;
+					count++;
+				}
+			}
+		}
+		time = new Date().getTime() - time;
+		//console.log("Time to populate:",time/1000+"s"," total voxels:",count);
+		time = new Date().getTime();
+		for(x = 0; x < max; x++) {
+			for(y = 0; y < max; y++) {
+				i = 0; // max = 256, so repeat it for each y coord
+				for(z = 0; z < max; z++) {
 					vox = voc.getVoxel([x,y,z]);
-					vox.should.have.property("r", i);
-					vox.should.have.property("g", i);
-					vox.should.have.property("b", i);
-					vox.should.have.property("material", i);
+					(vox[0] === i).should.equal(true, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
 					i++;
 				}
 			}
 		}
 		time = new Date().getTime() - time;
-		console.log("Time to check:",time/1000+"s");
+		//console.log("Time to check:",time/1000+"s");
 
 	});
-	if(0) {
 	it("should initialize an octet's data to zero using initializeOctet", function() {
+		var index, vox;
 		// set the voxel first so we're grabbing the right data with getVoxel
-		voc.setVoxel([0,0,0], {r:31,g:63,b:127,material:12});
-		// don't assume it got set correctly
-		let vox = voc.getVoxel([0,0,0]);
-		vox.should.have.property("r", 31);
-		vox.should.have.property("g", 63);
-		vox.should.have.property("b", 127);
-		vox.should.have.property("material", 12);
+		index = voc.setVoxel([0,0,0], {r:31,g:63,b:127,material:12});
 		// the tree was empty so the start of the leaf octet should be 264 for a tree of depth 5 (calculated externally) 
-		voc.initializeOctet(264); // initialize the octet beginning at offset 1, which is the second down from root octant
-		vox.should.have.property("r", 0);
-		vox.should.have.property("g", 0);
-		vox.should.have.property("b", 0);
-		vox.should.have.property("material", 0);
+		voc.initializeOctet(index); // initialize the octet beginning at offset 1, which is the second down from root octant
+		vox = voc.get(index);
+		vox[1].should.equal(0);
+		vox[2].should.equal(0);
+		vox[3].should.equal(0);
+		vox[4].should.equal(0);
 	});
-	it("should prune redundant branches using prune", function() {
+	xit("should prune redundant branches using prune", function() {
 		let x = 0, y = 0, z = 0, i = 0, vox = null;
 		for(; x < 32; x++) for(; y < 32; y++) for(; z < 32; z++) {
 			voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
 		}
 	});
-	}
 });
