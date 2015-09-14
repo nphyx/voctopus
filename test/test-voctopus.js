@@ -2,7 +2,40 @@
 require("should");
 var Voctopus = require("../src/voctopus").Voctopus;
 var VoctopusSchemas = require("../src/voctopus").VoctopusSchemas;
+var ExtDV = require("../src/voctopus").ExtDV;
 
+/**
+ * Used to loop through all 3 axes and check each voxel in several tests
+ */
+function loop3D(size, cbs) {
+	var cbx, cby, cbz, x, y, z;
+	cbx = typeof(cbs.x) === "function"?cbs.x:function(){};
+	cby = typeof(cbs.y) === "function"?cbs.y:function(){};
+	cbz = typeof(cbs.z) === "function"?cbs.z:function(){};
+	for(x = 0; x < size; x++) {
+		cbx([x,y,z]);
+		for(y = 0; y < size; y++) {
+			cby([x,y,z]);
+			for(z = 0; z < size; z++) {
+				cbz([x,y,z]);
+			}
+		}
+	}
+}
+
+describe("ExtDV", function() {
+	it("should implement Uint24 accessors", function() {
+		var i, n, buf, dv;
+		buf = new ArrayBuffer(3);
+		dv = new ExtDV(buf);
+		n = Math.pow(2, 24);
+		// this should give us decent coverage without trying every single number
+		for(i = 1; i < n; i += 111) {
+			dv.setUint24(0, i);
+			dv.getUint24(0).should.equal(i);
+		}
+	});
+});
 describe("voctopus", function() {
 	var d, voc;
 	beforeEach("set up a clean voctopus instance", function() {
@@ -14,14 +47,15 @@ describe("voctopus", function() {
 		voc.should.have.property("nextOctet");
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
-		(typeof(voc.octantOffset)).should.equal("function", "method octantOffset");
-		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel");
-		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel");
-		//(typeof(voc.vecOf)).should.equal("function", "method vecOf");
-		//(typeof(voc.parentOfKey)).should.equal("function", "method parentOfKey");
-		(typeof(voc.allocateOctet)).should.equal("function", "method allocateOctet");
-		//(typeof(voc.deallocate)).should.equal("function");
-		//(typeof(voc.voctants)).should.equal("object", "method voctants");
+		(typeof(voc.octantOffset)).should.equal("function", "method octantOffset not implemented");
+		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel not implemented");
+		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel not implemented");
+		(typeof(voc.getOctant)).should.equal("function", "method getOctant not implemented");
+		(typeof(voc.setOctant)).should.equal("function", "method setOctant not implemented");
+		(typeof(voc.getProperty)).should.equal("function", "method getProperty not implemented");
+		(typeof(voc.setProperty)).should.equal("function", "method setProperty not implemented");
+		(typeof(voc.allocateOctet)).should.equal("function", "method allocateOctet not implemented");
+		(typeof(voc.expand)).should.equal("function", "method expand not implemented");
 	});
 	it("should implement octant schemas", function() {
 		var prop;
@@ -65,6 +99,13 @@ describe("voctopus", function() {
 		voc.maxSize().should.eql(2396745*voxSize);
 		voc = new Voctopus(8);
 		voc.maxSize().should.eql(19173961*voxSize);
+	});
+	it("should refuse to create an octree larger than the schema's pointer can handle", function() {
+		var schema;
+		// make a contrived schema with a tiny pointer
+		schema = [{label:"value",length:1,offset:0},{label:"pointer",length:1,offset:1}];
+		// try to make a Voctopus bigger than 256 elements (this would be 
+		(function() {new Voctopus(3, schema)}).should.throwError();
 	});
 	it("should always return 0 at depth 0 for octantOffset", function() {
 		voc.octantOffset([ 0, 0, 0], 0).should.equal(0);
@@ -118,6 +159,7 @@ describe("voctopus", function() {
 	});
 	it("should expand the buffer using expand", function() {
 		var i, voc, ms;
+		var fun = () => {voc.expand()}
 		for(i = 3; i < 8; i++) {
 			voc = null;
 			voc = new Voctopus(i);
@@ -129,7 +171,7 @@ describe("voctopus", function() {
 			voc.buffer.byteLength.should.equal(~~(ms/2));
 			voc.expand();
 			voc.buffer.byteLength.should.equal(ms);
-			//voc.expand().should.throwError();
+			(fun).should.throwError();
 		}
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
@@ -150,64 +192,59 @@ describe("voctopus", function() {
 		dv.getUint32(268).should.eql(0, "voxel's pointer value is correct");
 	});
 	it("should get voxel data after setting it using getVoxel in RGBM schema", function() {
-		var max, x, y, z, i, index, vox, time, count = 0;
-		max = 32;
-		voc = new Voctopus(6, VoctopusSchemas.voctantRGBM);
+		var size, x, y, z, i, index, vox, time, count = 0;
+		voc = new Voctopus(5, VoctopusSchemas.voctantRGBM);
+		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
-		for(x = 0; x < max; x++) {
-			for(y = 0; y < max; y++) {
-				i = 0; // max = 256, so repeat it for each y coord
-				for(z = 0; z < max; z++) {
-					index = voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
-					i++;
-					count++;
-				}
+		loop3D(size, {
+			y:() => i = 0, 
+			z:(pos) => {
+				index = voc.setVoxel(pos, {r:i,g:i,b:i,material:i});
+				i++;
+				count++; 
 			}
-		}
+		});
 		time = new Date().getTime() - time;
 		console.log("Time to populate RGBM:",time/1000+"s"," total voxels:",count);
 		time = new Date().getTime();
-		for(x = 0; x < max; x++) {
-			for(y = 0; y < max; y++) {
-				i = 0; // max = 256, so repeat it for each y coord
-				for(z = 0; z < max; z++) {
-					vox = voc.getVoxel([x,y,z]);
-					(vox[0] === i).should.equal(true, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
-					i++;
-				}
+		loop3D(size, {
+			y:() => i = 0, 
+			z:(pos) => {
+				vox = voc.getVoxel(pos);
+				vox[0].should.equal(i, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
+				vox[1].should.equal(i, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
+				vox[2].should.equal(i, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
+				vox[3].should.equal(i, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
+				i++;
 			}
-		}
+		});
 		time = new Date().getTime() - time;
 		console.log("Time to check:",time/1000+"s");
 	});
 	it("should get voxel data after setting it using getVoxel in I8M schema", function() {
-		var max, x, y, z, i, index, vox, time, count = 0;
-		max = 32;
-		voc = new Voctopus(6, VoctopusSchemas.voctantI8M);
+		var size, i, index, vox, time, count = 0;
+		voc = new Voctopus(5, VoctopusSchemas.voctantI8M);
+		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
-		for(x = 0; x < max; x++) {
-			for(y = 0; y < max; y++) {
-				i = 0; // max = 256, so repeat it for each y coord
-				for(z = 0; z < max; z++) {
-					index = voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
-					i++;
-					count++;
-				}
+		loop3D(size, {
+			y:() => i = 0, 
+			z:(pos) => {
+				index = voc.setVoxel(pos, {material:i});
+				i++;
+				count++; 
 			}
-		}
+		});
 		time = new Date().getTime() - time;
 		console.log("Time to populate I8M:",time/1000+"s"," total voxels:",count);
 		time = new Date().getTime();
-		for(x = 0; x < max; x++) {
-			for(y = 0; y < max; y++) {
-				i = 0; // max = 256, so repeat it for each y coord
-				for(z = 0; z < max; z++) {
-					vox = voc.getVoxel([x,y,z]);
-					(vox[0] === i).should.equal(true, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
-					i++;
-				}
+		loop3D(size, {
+			y:() => i = 0, 
+			z:(pos) => {
+				vox = voc.getVoxel(pos);
+				vox[0].should.equal(i, "octant at x:"+pos[0]+" y:"+pos[1]+" z:"+pos[2]+" has value "+i);
+				i++;
 			}
-		}
+		});
 		time = new Date().getTime() - time;
 		console.log("Time to check:",time/1000+"s");
 	});
@@ -217,16 +254,14 @@ describe("voctopus", function() {
 		index = voc.setVoxel([0,0,0], {r:31,g:63,b:127,material:12});
 		// the tree was empty so the start of the leaf octet should be 264 for a tree of depth 5 (calculated externally) 
 		voc.initializeOctet(index); // initialize the octet beginning at offset 1, which is the second down from root octant
-		vox = voc.get(index);
+		vox = voc.getOctant(index);
 		vox[1].should.equal(0);
 		vox[2].should.equal(0);
 		vox[3].should.equal(0);
 		vox[4].should.equal(0);
 	});
-	xit("should prune redundant branches using prune", function() {
-		let x = 0, y = 0, z = 0, i = 0, vox = null;
-		for(; x < 32; x++) for(; y < 32; y++) for(; z < 32; z++) {
-			voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
-		}
+	it("should prune redundant branches using prune", function() {
+		var i = 0;
+		loop3D(16, {y:() => i++, z:(pos)=> voc.setVoxel(pos, {r:i,g:i,b:i,material:i})});
 	});
 });

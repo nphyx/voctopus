@@ -1,14 +1,17 @@
 "use strict";
 /**
- * Provide a 24 bit int implementation for DataViews
+ * Provide a 24 bit int implementation for DataViews. Note this
+ * causes two reads/writes per call, meaning it's going to be
+ * around half as fast as the native implementations.
  */
 DataView.prototype.getUint24 = function(pos) {
-	return this.getUint16(pos) << 4 + this.getUint8(pos+2);
+	return (this.getUint16(pos) << 8) + this.getUint8(pos+2);
 }
 
 DataView.prototype.setUint24 = function(pos, val) {
-	this.setUint16(pos, val >> 2);
-	this.setUint8(pos, val & 256);
+	//console.log("setting",val,"as",val >> 8,"and",val & ~4294967040);
+	this.setUint16(pos, val >> 8);
+	this.setUint8(pos+2, val & ~4294967040);
 }
 
 /**
@@ -51,55 +54,46 @@ var VoctopusSchemas = {
  * 1 octet = 8 octants, or one tree node
  *
  * TODO: Deal with endianness in buffer
- * TODO: Check that the voctopus size does not exceed the limits of the schema's pointer
  */
 function Voctopus(depth, schema = VoctopusSchemas.voctantRGBM) {
-	var buffer, octantSize, octetSize, nextOctet, startSize;
-	// figure out the maximum number of bytes to allocate initially -
-	// it must be at most the maximum length, and at least 146 or maximum length/4,
-	// whichever is higher, times 8 (because each Octant is 8 bytes long)
+	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxP;
+
+	// calculate the size of a single octant based on the sum of lengths of properties in the schema
 	octantSize = schema.reduce((prev, cur) => prev += cur.length, 0);
+	// the size of an octant is just the size of 8 octets
 	octetSize = octantSize * 8;
-	nextOctet = octetSize+octantSize; // we'll initialize the first octet below, so start at the next one
-	Object.defineProperty(this, "schema", {
-		get: () => schema
-	});
-	Object.defineProperty(this, "octetSize", {
-		get: () => octetSize
-	});
-	Object.defineProperty(this, "octantSize", {
-		get: () => octantSize
-	});
-	Object.defineProperty(this, "freedOctets", {
-		value: [],
-		enumerable: false
-	});
-	Object.defineProperty(this, "nextOctet", {
-		get: () => nextOctet,
-		set: (v) => nextOctet = v,
-		enumerable: false
+
+	// define public properties now
+	Object.defineProperties(this, {
+		"schema":{get: () => schema},
+		"octetSize":{get: () => octetSize},
+		"octantSize":{get: () => octantSize},
+		"freedOctets":{value: [], enumerable: false},	
+		"nextOctet":{get: () => nextOctet, set: (v) => nextOctet = v, enumerable: false},
+		"depth":{get: () => depth,},
+		"buffer":{get: () => buffer, set: (x) => buffer = x},
+		"view":{get: () => view, set: (x) => view = x}
 	});
 
+	// we'll initialize the first octet below, so start at the next one
+	nextOctet = octetSize+octantSize; 
+
+	// figure out the maximum number of bytes to allocate initially -
+	// it must be at most the maximum length, and at least 146 or maximum length/4,
+	// whichever is higher, times the size of an Octant
+	startSize = Math.max((9*this.octantSize), (this.maxSize()/4));
+
+	// check to make sure the requested Voctopus size is sane
+	maxP = Math.pow(2, schema.find((prop) => prop.label === "pointer").length*8);
+	if(this.maxSize() > maxP) throw new Error("Voctant#constructor: requested a depth of "+depth+" but that would exceed the schema's pointer limitations of "+maxP);
+
 	/**
-	 * @property buffer
-	 * Store the raw data in an ArrayBuffer. Octants are 8 bytes - 1 byte each 
-	 * for rgb + 1 byte for material index (stores additional material info) 
-	 * + 4 bytes for a 32 bit float pointer. A full octant is thus 16 bytes. 
-	 * An octet contains 8 octants. Each octet is stored sequentially, with 
-	 * the pointer of each octant indicating the index of its child octet. 
-	 *
 	 * The formula for the total size of a fully dense octree is the sum of 
-	 * powers of 8 up to 8^depth * 2 bytes. We optimistically assume that the 
+	 * powers of 8 up to 8^depth * (octantSize) bytes. We optimistically assume that the 
 	 * octree is only about 1/8th dense, and expand it if we have to. This is 
-	 * based on the fact that the top half of a tree is probably sky, and the 
+	 * based on the assumpton that the top half of a tree is probably sky, and the 
 	 * bottom half is probably fairly sparse.
 	 */
-	Object.defineProperty(this, "buffer", {
-		get: () => buffer,
-		set: (x) => buffer = x 
-	});
-	this.depth = depth;
-	startSize = Math.max((9*this.octantSize), (this.maxSize()/4));
 	try {
 		this.buffer = new ArrayBuffer(startSize);
 		this.buffer.version = 0;
@@ -107,18 +101,19 @@ function Voctopus(depth, schema = VoctopusSchemas.voctantRGBM) {
 	catch(e) {
 		throw new Error("Tried to initialize a Voctopus buffer at depth "+this.depth+", but "+startSize+" bytes was too large");
 	}
+	// initialize the DataView
 	this.view = new DataView(this.buffer);
-	this.setOctant(0, {pointer:this.octantSize}); // initialize the root node
-
+	// initialize the root node
+	this.setOctant(0, {pointer:this.octantSize}); 
 	return this;
 }
 
 Voctopus.prototype.getVoxel = function(v) {
 	// note we set this up to skip the root node since its index is predictable
-	let d = 1, cursor = this.octantSize, index = 0, pOff = this.schema.find((el) => el.label === "pointer").offset;
+	let d = 1, cursor = this.octantSize, index = 0, pointer = this.schema.find((el) => el.label === "pointer"), pOff = pointer.offset;
 	// walk the tree til we reach the end of a branch
 	do {
-		index = this.view.getUint32(cursor+pOff);
+		index = this.getProperty(cursor, pointer);
 		d++; // we're starting at the first octet so increment depth first
 		cursor = index+this.octantOffset(v, d);
 	}
@@ -152,7 +147,7 @@ Voctopus.prototype.getProperty = function(index, prop) {
 		switch(prop.length) {
 			case 1: return this.view.getUint8(pos);
 			case 2: return this.view.getUint16(pos);
-			case 2: return this.view.getUint24(pos);
+			case 3: return this.view.getUint24(pos);
 			case 4: return this.view.getUint32(pos);
 			//default: throw new Error("Invalid property length for property "+prop.label)
 		}
@@ -288,4 +283,6 @@ Voctopus.prototype.octantOffset = function(v, d) {
 if(typeof(module) !== "undefined") {
 	module.exports.VoctopusSchemas = VoctopusSchemas;
 	module.exports.Voctopus = Voctopus;
+	// expose the extended DataView for testing
+	module.exports.ExtDV = DataView;
 }
