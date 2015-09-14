@@ -9,7 +9,6 @@ DataView.prototype.getUint24 = function(pos) {
 }
 
 DataView.prototype.setUint24 = function(pos, val) {
-	//console.log("setting",val,"as",val >> 8,"and",val & ~4294967040);
 	this.setUint16(pos, val >> 8);
 	this.setUint8(pos+2, val & ~4294967040);
 }
@@ -41,7 +40,6 @@ var VoctopusSchemas = {
 	 * Schema for material index voctants with 8 bit index and 16 bit pointer.
 	 * Lower memory footprint = larger octrees, at the cost of color fidelity.
 	 */
-/* jshint unused:false */
 	voctantI8M:[
 		{label:"material",offset:0,length:1},
 		{label:"pointer",offset:1,length:3}
@@ -110,34 +108,55 @@ function Voctopus(depth, schema = VoctopusSchemas.voctantRGBM) {
 
 Voctopus.prototype.getVoxel = function(v) {
 	// note we set this up to skip the root node since its index is predictable
-	let d = 1, cursor = this.octantSize, index = 0, pointer = this.schema.find((el) => el.label === "pointer"), pOff = pointer.offset;
-	// walk the tree til we reach the end of a branch
-	do {
-		index = this.getProperty(cursor, pointer);
-		d++; // we're starting at the first octet so increment depth first
-		cursor = index+this.octantOffset(v, d);
-	}
-	while(index !== 0 && d < this.depth);
-	return this.getOctant(cursor);
+	return this.getOctant(this.traverse(v));
 }
 
 Voctopus.prototype.setVoxel = function(v, props) {
 	// note we set this up to skip the root node since its index is predictable
-	var d = 1, cursor = 0, index = this.octantSize, pointer = this.schema.find((el) => el.label === "pointer"), pOff = pointer.offset;
-	// walk the tree til we reach the end of a branch to full depth
-	while(d < this.depth) {
-		cursor = index+this.octantOffset(v, d);
-		index = this.getProperty(cursor, pointer);
-		// find the child index, create new octet if necessary
-		if(index === 0) {
-			index = this.getEmptyOctet();
-			this.setProperty(cursor, pointer, index)
+	return this.setOctant(this.traverse(v, true), props);
+}
+
+/**
+ * Traverses the octree from the root to the supplied position vector, returning
+ * the buffer index of the leaf octant. Optionally initializes new octets when
+ * init = true.
+ */
+Voctopus.prototype.traverse = function(v, init = false) {
+	var d = 1, cursor = this.octantSize, nextOctet = 0, pointer = this.schema.find((el) => el.label === "pointer");
+	// walk the tree til we reach the end of a branch
+	do {
+		nextOctet = this.getProperty(cursor, pointer);
+		if(init && !nextOctet) {
+			nextOctet = this.getEmptyOctet();
+			this.setProperty(cursor, pointer, nextOctet);
 		}
+		if(nextOctet) cursor = nextOctet+this.octantOffset(v, ++d);
+	}
+	while(nextOctet !== 0 && d < this.depth);
+	return cursor;
+}
+
+/**
+ * Walks the octree from the root to the supplied position vector, building an
+ * array of indices of each octet as it goes, then returns the array. Optionally
+ * initializes octets when init = true.
+ * 
+ */
+Voctopus.prototype.walk = function(v, init = false) {
+	var d = 1, cursor = this.octantSize, pointer = this.schema.find((el) => el.label === "pointer"), stack = new Uint32Array(this.depth);
+	stack[0] = cursor;
+	// walk the tree til we reach the end of a branch
+	do {
+		stack[d] = this.getProperty(cursor, pointer);
+		if(init && stack[d] === 0) {
+			stack[d] = this.getEmptyOctet();
+			this.setProperty(cursor, pointer, stack[d]);
+		}
+		if(stack[d] !== 0) cursor = stack[d]+this.octantOffset(v, d+1);
 		d++;
 	}
-	cursor = index+this.octantOffset(v, d); 
-	this.setOctant(cursor, props);
-	return cursor;
+	while(d < this.depth);
+	return stack;
 }
 
 Voctopus.prototype.getProperty = function(index, prop) {
@@ -176,8 +195,7 @@ Voctopus.prototype.setProperty = function(index, prop, value) {
 }
 
 Voctopus.prototype.getOctant = function(index) {
-	var prop, pos, i = 0, l = this.schema.length, dv = this.view, 
-	voxel = new Array(l);
+	var prop, i = 0, l = this.schema.length, voxel = new Array(l);
 	for(;i < l; i++) {
 		prop = this.schema[i];
 		voxel[i] = this.getProperty(index, prop);
@@ -186,7 +204,7 @@ Voctopus.prototype.getOctant = function(index) {
 }
 
 Voctopus.prototype.setOctant = function(index, props) {
-	var prop, pos, i = 0, dv = this.view, l = this.schema.length;
+	var prop, i = 0, l = this.schema.length;
 	for(;i < l; i++) {
 		prop = this.schema[i];
 		if(typeof(props[prop.label]) !== "undefined") {
@@ -225,6 +243,7 @@ Voctopus.prototype.maxSize = function() {
  * TODO: verify data integrity in test 
  *
  * @param this.depth {int} max depth of tree
+ * @return true if the voctopus was expanded, otherwise false
  */
 Voctopus.prototype.expand = function() {
 	var maxSize, s, tmp, tmpdv, dv, mod, len, i;
@@ -234,7 +253,7 @@ Voctopus.prototype.expand = function() {
 	// derive last sparse factor from current this.buffer length, then decrement it
 	s = ~~(maxSize/len)-1;
 	// don't divide by zero, that would be bad
-	if(s < 1) throw new Error("tried to expand a voctopus, but it's already at maximum size - this means something has gone horribly wrong!");
+	if(s < 1) return false; //throw new Error("tried to expand a voctopus, but it's already at maximum size - this means something has gone horribly wrong!");
 	tmp = new ArrayBuffer(~~(maxSize/s));
 	tmpdv = new DataView(tmp);
 	mod = len%8;
@@ -246,7 +265,7 @@ Voctopus.prototype.expand = function() {
 	tmp.version = this.buffer.version+1;
 	this.buffer = tmp;
 	this.view = tmpdv;
-	return this;
+	return true;
 }
 
 /**
