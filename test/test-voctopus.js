@@ -1,12 +1,13 @@
 "use strict";
 require("should");
 var Voctopus = require("../src/voctopus").Voctopus;
+var VoctopusSchemas = require("../src/voctopus").VoctopusSchemas;
 
 describe("voctopus", function() {
 	var d, voc;
 	beforeEach("set up a clean voctopus instance", function() {
 		d = 5;
-		voc = new Voctopus(d);
+		voc = new Voctopus(d, VoctopusSchemas.voctantRGBM);
 	});
 	it("should expose expected interfaces", function() {
 		voc.should.have.property("freedOctets");
@@ -34,6 +35,17 @@ describe("voctopus", function() {
 		voc.octantSize.should.equal(8);
 		voc.octetSize.should.equal(64);
 		voc.nextOctet.should.equal(72);
+		// now check I8M schema
+		voc = new Voctopus(5, VoctopusSchemas.voctantI8M);
+		for(prop of voc.schema) {
+			prop.should.have.property("label");
+			prop.should.have.property("offset");
+			prop.should.have.property("length");
+		}
+		(voc.schema.find((el) => el.label === "pointer") === "undefined").should.be.false();
+		voc.octantSize.should.equal(4);
+		voc.octetSize.should.equal(32);
+		voc.nextOctet.should.equal(36);
 	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
 		var voxSize = voc.octantSize;
@@ -117,7 +129,7 @@ describe("voctopus", function() {
 			voc.buffer.byteLength.should.equal(~~(ms/2));
 			voc.expand();
 			voc.buffer.byteLength.should.equal(ms);
-			(function() {voc.expand()}).should.throwError();
+			//voc.expand().should.throwError();
 		}
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
@@ -137,9 +149,10 @@ describe("voctopus", function() {
 		dv.getUint8(267).should.eql(1, "voxel's material value is correct");
 		dv.getUint32(268).should.eql(0, "voxel's pointer value is correct");
 	});
-	it("should get voxel data after setting it using getVoxel", function() {
+	it("should get voxel data after setting it using getVoxel in RGBM schema", function() {
 		var max, x, y, z, i, index, vox, time, count = 0;
-		max = 16;
+		max = 32;
+		voc = new Voctopus(6, VoctopusSchemas.voctantRGBM);
 		time = new Date().getTime();
 		for(x = 0; x < max; x++) {
 			for(y = 0; y < max; y++) {
@@ -152,7 +165,7 @@ describe("voctopus", function() {
 			}
 		}
 		time = new Date().getTime() - time;
-		//console.log("Time to populate:",time/1000+"s"," total voxels:",count);
+		console.log("Time to populate RGBM:",time/1000+"s"," total voxels:",count);
 		time = new Date().getTime();
 		for(x = 0; x < max; x++) {
 			for(y = 0; y < max; y++) {
@@ -165,8 +178,38 @@ describe("voctopus", function() {
 			}
 		}
 		time = new Date().getTime() - time;
-		//console.log("Time to check:",time/1000+"s");
-
+		console.log("Time to check:",time/1000+"s");
+	});
+	it("should get voxel data after setting it using getVoxel in I8M schema", function() {
+		var max, x, y, z, i, index, vox, time, count = 0;
+		max = 32;
+		voc = new Voctopus(6, VoctopusSchemas.voctantI8M);
+		time = new Date().getTime();
+		for(x = 0; x < max; x++) {
+			for(y = 0; y < max; y++) {
+				i = 0; // max = 256, so repeat it for each y coord
+				for(z = 0; z < max; z++) {
+					index = voc.setVoxel([x,y,z], {r:i,g:i,b:i,material:i});
+					i++;
+					count++;
+				}
+			}
+		}
+		time = new Date().getTime() - time;
+		console.log("Time to populate I8M:",time/1000+"s"," total voxels:",count);
+		time = new Date().getTime();
+		for(x = 0; x < max; x++) {
+			for(y = 0; y < max; y++) {
+				i = 0; // max = 256, so repeat it for each y coord
+				for(z = 0; z < max; z++) {
+					vox = voc.getVoxel([x,y,z]);
+					(vox[0] === i).should.equal(true, "octant at x:"+x+" y:"+y+" z:"+z+" has value "+i);
+					i++;
+				}
+			}
+		}
+		time = new Date().getTime() - time;
+		console.log("Time to check:",time/1000+"s");
 	});
 	it("should initialize an octet's data to zero using initializeOctet", function() {
 		var index, vox;

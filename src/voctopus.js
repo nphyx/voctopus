@@ -1,4 +1,15 @@
 "use strict";
+/**
+ * Provide a 24 bit int implementation for DataViews
+ */
+DataView.prototype.getUint24 = function(pos) {
+	return this.getUint16(pos) << 4 + this.getUint8(pos+2);
+}
+
+DataView.prototype.setUint24 = function(pos, val) {
+	this.setUint16(pos, val >> 2);
+	this.setUint8(pos, val & 256);
+}
 
 /**
  * Sum of powers of 8 up to n. Used in various calculations.
@@ -6,26 +17,43 @@
 function sump8(n) {
 	return ~~((Math.pow(8, n+1) -1) / 7);
 }
+
 /**
  * New approach to octants: a schema description instead of a DataView.
- * This should improve performance.
  */
-var VoctantRGBM = [
-	{label:"r",offset:0,length:1},
-	{label:"g",offset:1,length:1},
-	{label:"b",offset:2,length:1},
-	{label:"material",offset:3,length:1},
-	{label:"pointer",offset:4,length:4}
-];
+var VoctopusSchemas = {
+	/**
+	 * Schema for RGB voctants with an additional material index field. Balance
+	 * between color fidelity and reasonable data footprint.
+	 */
+	voctantRGBM:[
+		{label:"r",offset:0,length:1},
+		{label:"g",offset:1,length:1},
+		{label:"b",offset:2,length:1},
+		{label:"material",offset:3,length:1},
+		{label:"pointer",offset:4,length:4}
+	],
+
+	/**
+	 * Schema for material index voctants with 8 bit index and 16 bit pointer.
+	 * Lower memory footprint = larger octrees, at the cost of color fidelity.
+	 */
+/* jshint unused:false */
+	voctantI8M:[
+		{label:"material",offset:0,length:1},
+		{label:"pointer",offset:1,length:3}
+	]
+}
 
 /**
  * Quick definition of terms:
  * 1 octant = one voxel at a given depth
- * 1 octant = 8 octants, or one tree node
+ * 1 octet = 8 octants, or one tree node
  *
  * TODO: Deal with endianness in buffer
+ * TODO: Check that the voctopus size does not exceed the limits of the schema's pointer
  */
-function Voctopus(depth, schema = VoctantRGBM) {
+function Voctopus(depth, schema = VoctopusSchemas.voctantRGBM) {
 	var buffer, octantSize, octetSize, nextOctet, startSize;
 	// figure out the maximum number of bytes to allocate initially -
 	// it must be at most the maximum length, and at least 146 or maximum length/4,
@@ -80,7 +108,7 @@ function Voctopus(depth, schema = VoctantRGBM) {
 		throw new Error("Tried to initialize a Voctopus buffer at depth "+this.depth+", but "+startSize+" bytes was too large");
 	}
 	this.view = new DataView(this.buffer);
-	this.set(0, {pointer:this.octantSize}); // initialize the root node
+	this.setOctant(0, {pointer:this.octantSize}); // initialize the root node
 
 	return this;
 }
@@ -95,56 +123,79 @@ Voctopus.prototype.getVoxel = function(v) {
 		cursor = index+this.octantOffset(v, d);
 	}
 	while(index !== 0 && d < this.depth);
-	return this.get(cursor);
+	return this.getOctant(cursor);
 }
 
 Voctopus.prototype.setVoxel = function(v, props) {
 	// note we set this up to skip the root node since its index is predictable
-	var d = 1, cursor = 0, index = this.octantSize, pOff = this.schema.find((el) => el.label === "pointer").offset;
+	var d = 1, cursor = 0, index = this.octantSize, pointer = this.schema.find((el) => el.label === "pointer"), pOff = pointer.offset;
 	// walk the tree til we reach the end of a branch to full depth
 	while(d < this.depth) {
 		cursor = index+this.octantOffset(v, d);
-		index = this.view.getUint32(cursor+pOff);
+		index = this.getProperty(cursor, pointer);
 		// find the child index, create new octet if necessary
 		if(index === 0) {
 			index = this.getEmptyOctet();
-			this.view.setUint32(cursor+pOff, index)
+			this.setProperty(cursor, pointer, index)
 		}
 		d++;
 	}
 	cursor = index+this.octantOffset(v, d); 
-	this.set(cursor, props);
+	this.setOctant(cursor, props);
 	return cursor;
 }
 
-Voctopus.prototype.get = function(index) {
+Voctopus.prototype.getProperty = function(index, prop) {
+	var pos;
+	pos = index+prop.offset;
+	try {
+		switch(prop.length) {
+			case 1: return this.view.getUint8(pos);
+			case 2: return this.view.getUint16(pos);
+			case 2: return this.view.getUint24(pos);
+			case 4: return this.view.getUint32(pos);
+			//default: throw new Error("Invalid property length for property "+prop.label)
+		}
+	}
+	catch(e) {
+		throw new Error("Tried to get property "+prop.label+" at "+(index+prop.offset)+" but got error "+e+", buffer length:"+this.buffer.byteLength);
+	}
+}
+
+Voctopus.prototype.setProperty = function(index, prop, value) {
+	var pos;
+	pos = index+prop.offset;
+	try {
+		switch(prop.length) {
+			case 1: this.view.setUint8(pos, value); break;
+			case 2: this.view.setUint16(pos, value); break;
+			case 3: this.view.setUint24(pos, value); break;
+			case 4: this.view.setUint32(pos, value); break;
+			//default: throw new Error("Invalid property length for property "+label)
+		}
+	}
+	catch(e) {
+		throw new Error("Tried to set property "+prop.label+" at "+(index+prop.offset)+" to "+value+" but got error "+e+", buffer length:"+this.buffer.byteLength);
+	}
+
+}
+
+Voctopus.prototype.getOctant = function(index) {
 	var prop, pos, i = 0, l = this.schema.length, dv = this.view, 
 	voxel = new Array(l);
 	for(;i < l; i++) {
 		prop = this.schema[i];
-		pos = index+prop.offset;
-		switch(prop.length) {
-			case 1: voxel[i] = dv.getUint8(pos); break;
-			case 2: voxel[i] = dv.getUint16(pos); break;
-			case 4: voxel[i] = dv.getUint32(pos); break;
-			//default: throw new Error("Invalid property length for property "+prop.label)
-		}
+		voxel[i] = this.getProperty(index, prop);
 	}
 	return voxel;
 }
 
-Voctopus.prototype.set = function(index, props) {
+Voctopus.prototype.setOctant = function(index, props) {
 	var prop, pos, i = 0, dv = this.view, l = this.schema.length;
 	for(;i < l; i++) {
 		prop = this.schema[i];
 		if(typeof(props[prop.label]) !== "undefined") {
-			pos = index+prop.offset;
-			switch(prop.length) {
-				case 1: dv.setUint8(pos, props[prop.label]); break;
-				case 2: dv.setUint16(pos, props[prop.label]); break;
-				case 4: dv.setUint32(pos, props[prop.label]); break;
-				//default: throw new Error("Invalid property length for property "+label)
-			}
+			this.setProperty(index, prop, props[prop.label]);
 		}
 	}
 }
@@ -235,5 +286,6 @@ Voctopus.prototype.octantOffset = function(v, d) {
  * Support commonjs modules for Nodejs/backend
  */
 if(typeof(module) !== "undefined") {
+	module.exports.VoctopusSchemas = VoctopusSchemas;
 	module.exports.Voctopus = Voctopus;
 }
