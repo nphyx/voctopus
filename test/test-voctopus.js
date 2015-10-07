@@ -25,6 +25,7 @@ function loop3D(size, cbs) {
 
 describe("ExtDV", function() {
 	it("should implement Uint24 accessors", function() {
+		this.timeout(10000);
 		var i, n, buf, dv;
 		buf = new ArrayBuffer(3);
 		dv = new ExtDV(buf);
@@ -203,8 +204,9 @@ describe("Voctopus", function() {
 		voc.walk([0,0,0], true).should.eql(new Uint32Array([8, 72, 136, 200, 264]));
 	});
 	it("should get voxel data after setting it using getVoxel in RGBM schema", function() {
+		this.timeout(10000);
 		var size, x, y, z, i, index, vox, time, count = 0;
-		voc = new Voctopus(5, VoctopusSchemas.voctantRGBM);
+		voc = new Voctopus(6, VoctopusSchemas.voctantRGBM);
 		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
 		loop3D(size, {
@@ -233,8 +235,9 @@ describe("Voctopus", function() {
 		console.log("Time to check:",time/1000+"s");
 	});
 	it("should get voxel data after setting it using getVoxel in I8M schema", function() {
+		this.timeout(10000);
 		var size, i, index, vox, time, count = 0;
-		voc = new Voctopus(5, VoctopusSchemas.voctantI8M);
+		voc = new Voctopus(6, VoctopusSchemas.voctantI8M);
 		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
 		loop3D(size, {
