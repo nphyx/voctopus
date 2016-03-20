@@ -1,15 +1,16 @@
 "use strict";
 var gulp = require("gulp");
-var babel = require("gulp-babel");
+// test suites
 var babelRegister = require("babel-core/register");
 var exec = require("child_process").exec;
 var mocha = require("gulp-mocha");
 var istanbul = require("gulp-babel-istanbul");
-
-gulp.task("default", function() {
-	return gulp.src(["src/*js"])
-	.pipe(babel())
-	.pipe(gulp.dest("dist"));
+gulp.task("default", function(cb) {
+	exec("browserify -t babelify voctopus.js | uglifyjs > dist/voctopus.ugly.js", function(err, stdout, stderr) {
+		console.log(stderr);
+		console.log(stdout);
+		cb(err);
+	});
 });
 
 gulp.task("doc", function (cb) {
