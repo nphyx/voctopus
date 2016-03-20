@@ -1,5 +1,16 @@
 "use strict";
+const schemas = require("./voctopus.schemas");
 /**
+ * Voctopus Core
+ * =============
+ *
+ * This contains the core Voctopus object.
+ *
+ * @module voctopus.core
+ */
+
+/**
+ * @private
  * Provide a 24 bit int implementation for DataViews. Note this
  * causes two reads/writes per call, meaning it's going to be
  * around half as fast as the native implementations.
@@ -8,42 +19,21 @@ DataView.prototype.getUint24 = function(pos) {
 	return (this.getUint16(pos) << 8) + this.getUint8(pos+2);
 }
 
+/**
+ * @private
+ * Setter for Uint24.
+ */
 DataView.prototype.setUint24 = function(pos, val) {
 	this.setUint16(pos, val >> 8);
 	this.setUint8(pos+2, val & ~4294967040);
 }
 
 /**
+ * @private
  * Sum of powers of 8 up to n. Used in various calculations.
  */
 function sump8(n) {
 	return ~~((Math.pow(8, n+1) -1) / 7);
-}
-
-/**
- * New approach to octants: a schema description instead of a DataView.
- */
-var VoctopusSchemas = {
-	/**
-	 * Schema for RGB voctants with an additional material index field. Balance
-	 * between color fidelity and reasonable data footprint.
-	 */
-	voctantRGBM:[
-		{label:"r",offset:0,length:1},
-		{label:"g",offset:1,length:1},
-		{label:"b",offset:2,length:1},
-		{label:"material",offset:3,length:1},
-		{label:"pointer",offset:4,length:4}
-	],
-
-	/**
-	 * Schema for material index voctants with 8 bit index and 16 bit pointer.
-	 * Lower memory footprint = larger octrees, at the cost of color fidelity.
-	 */
-	voctantI8M:[
-		{label:"material",offset:0,length:1},
-		{label:"pointer",offset:1,length:3}
-	]
 }
 
 /**
@@ -53,7 +43,7 @@ var VoctopusSchemas = {
  *
  * TODO: Deal with endianness in buffer
  */
-function Voctopus(depth, schema = VoctopusSchemas.voctantRGBM) {
+function Voctopus(depth, schema = schemas.RGBM) {
 	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxP;
 
 	// calculate the size of a single octant based on the sum of lengths of properties in the schema
@@ -311,7 +301,6 @@ Voctopus.prototype.octantOffset = function(v, d) {
  * Support commonjs modules for Nodejs/backend
  */
 if(typeof(module) !== "undefined") {
-	module.exports.VoctopusSchemas = VoctopusSchemas;
 	module.exports.Voctopus = Voctopus;
 	// expose the extended DataView for testing
 	module.exports.ExtDV = DataView;

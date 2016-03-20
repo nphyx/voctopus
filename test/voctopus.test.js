@@ -1,8 +1,8 @@
 "use strict";
 require("should");
-var Voctopus = require("../src/voctopus").Voctopus;
-var VoctopusSchemas = require("../src/voctopus").VoctopusSchemas;
-var ExtDV = require("../src/voctopus").ExtDV;
+var Voctopus = require("../src/voctopus.core").Voctopus;
+var VoctopusSchemas = require("../src/voctopus.schemas.js");
+var ExtDV = require("../src/voctopus.core").ExtDV;
 
 /**
  * Used to loop through all 3 axes and check each voxel in several tests
@@ -42,7 +42,7 @@ describe("Voctopus", function() {
 	var d, voc;
 	beforeEach("set up a clean voctopus instance", function() {
 		d = 5;
-		voc = new Voctopus(d, VoctopusSchemas.voctantRGBM);
+		voc = new Voctopus(d, VoctopusSchemas.RGBM);
 	});
 	it("should expose expected interfaces", function() {
 		voc.should.have.property("freedOctets");
@@ -72,7 +72,7 @@ describe("Voctopus", function() {
 		voc.octetSize.should.equal(64);
 		voc.nextOctet.should.equal(72);
 		// now check I8M schema
-		voc = new Voctopus(5, VoctopusSchemas.voctantI8M);
+		voc = new Voctopus(5, VoctopusSchemas.I8M);
 		for(prop of voc.schema) {
 			prop.should.have.property("label");
 			prop.should.have.property("offset");
@@ -206,7 +206,7 @@ describe("Voctopus", function() {
 	it("should get voxel data after setting it using getVoxel in RGBM schema", function() {
 		this.timeout(10000);
 		var size, x, y, z, i, index, vox, time, count = 0;
-		voc = new Voctopus(6, VoctopusSchemas.voctantRGBM);
+		voc = new Voctopus(6, VoctopusSchemas.RGBM);
 		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
 		loop3D(size, {
@@ -237,7 +237,7 @@ describe("Voctopus", function() {
 	it("should get voxel data after setting it using getVoxel in I8M schema", function() {
 		this.timeout(10000);
 		var size, i, index, vox, time, count = 0;
-		voc = new Voctopus(6, VoctopusSchemas.voctantI8M);
+		voc = new Voctopus(6, VoctopusSchemas.I8M);
 		size = Math.pow(2, voc.depth - 1);
 		time = new Date().getTime();
 		loop3D(size, {
