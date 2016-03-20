@@ -10,21 +10,17 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "babel": "^5.8.23",
-    "babel-runtime": "^5.8.20",
-    "chai": "*",
+		"babel-core": "^6.0.0",
+    "babel-loader": "^6.0.0",
     "gulp": "^3.9.0",
-    "gulp-babel": "^5.2.1",
-    "gulp-istanbul": "^0.10.0",
-    "gulp-istanbul-enforcer": "^1.0.3",
+    "gulp-babel": "^6.0.0",
+    "gulp-babel-istanbul": "^1.00.0",
+		"gulp-inject-modules": "^0.1.1",
     "gulp-mocha": "^2.1.3",
-    "isparta": "^3.0.4",
-    "jsdoc": "*",
+    "jsdox": "*",
     "jshint": "*",
     "mocha": "*",
-    "mocha-babel": "^3.0.0",
-    "should": "*",
-    "sinon": "*"
+    "should": "*"
   },
   "jshintConfig": {
     "curly": false,
@@ -52,5 +48,10 @@
       "afterEach": false
     }
   },
+	"babel": {
+		"presets": [
+			"es2015"
+		]
+	},
   "license": "MIT"
 }

@@ -223,6 +223,9 @@ Voctopus.prototype.getEmptyOctet = function() {
 	else return this.allocateOctet();
 }
 
+/**
+ * Allocates an octet, returning its address and incrementing the nextOctet pointer.
+ */
 Voctopus.prototype.allocateOctet = function() {
 	if(this.nextOctet+this.octetSize > this.buffer.length) this.expand();
 	var ret = this.nextOctet;
@@ -230,7 +233,15 @@ Voctopus.prototype.allocateOctet = function() {
 	return ret;
 }
 
+/**
+ * Prunes redundant octets (those which are empty or have identical values). Freed
+ * octets are added to the freedOctets array.
+ */
 Voctopus.prototype.prune = function() {
+	var d = 0, cursor = this.octantSize, nextOctet = 0, pointer = this.schema.find((el) => el.label === "pointer");
+	function checkOctet() {
+			
+	}
 }
 
 Voctopus.prototype.maxSize = function() {
