@@ -1,55 +1,35 @@
 "use strict";
 const schemas = require("./voctopus.schemas");
+const util = require("../src/voctopus.util.js");
+const {maxOctreeSize, npot} = util;
+
 /**
  * Voctopus Core
  * =============
  *
  * This contains the core Voctopus object.
  *
- * @module voctopus.core
- */
-
-/**
- * @private
- * Provide a 24 bit int implementation for DataViews. Note this
- * causes two reads/writes per call, meaning it's going to be
- * around half as fast as the native implementations.
- */
-DataView.prototype.getUint24 = function(pos) {
-	return (this.getUint16(pos) << 8) + this.getUint8(pos+2);
-}
-
-/**
- * @private
- * Setter for Uint24.
- */
-DataView.prototype.setUint24 = function(pos, val) {
-	this.setUint16(pos, val >> 8);
-	this.setUint8(pos+2, val & ~4294967040);
-}
-
-/**
- * @private
- * Sum of powers of 8 up to n. Used in various calculations.
- */
-function sump8(n) {
-	return ~~((Math.pow(8, n+1) -1) / 7);
-}
-
-/**
  * Quick definition of terms:
  * 1 octant = one voxel at a given depth
  * 1 octet = 8 octants, or one tree node
  *
+ * @module voctopus.core
+ */
+
+/**
+ *
  * TODO: Deal with endianness in buffer
  */
 function Voctopus(depth, schema = schemas.RGBM) {
-	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxP;
+	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxP, maxSize, updated, detached;
 
-	// calculate the size of a single octant based on the sum of lengths of properties in the schema
+	/**
+	 * calculate the size of a single octant based on the sum of lengths of properties 
+	 * in the schema. the size of an octant is just the size of 8 octets
+	 */
 	octantSize = schema.reduce((prev, cur) => prev += cur.length, 0);
-	// the size of an octant is just the size of 8 octets
 	octetSize = octantSize * 8;
+	maxSize = maxOctreeSize(depth, octantSize);
 
 	// define public properties now
 	Object.defineProperties(this, {
@@ -60,28 +40,26 @@ function Voctopus(depth, schema = schemas.RGBM) {
 		"nextOctet":{get: () => nextOctet, set: (v) => nextOctet = v, enumerable: false},
 		"depth":{get: () => depth,},
 		"buffer":{get: () => buffer, set: (x) => buffer = x},
-		"view":{get: () => view, set: (x) => view = x}
+		"view":{get: () => view, set: (x) => view = x},
+		"maxSize":{get: () => maxSize}
 	});
 
 	// we'll initialize the first octet below, so start at the next one
 	nextOctet = octetSize+octantSize; 
 
-	// figure out the maximum number of bytes to allocate initially -
-	// it must be at most the maximum length, and at least 146 or maximum length/4,
-	// whichever is higher, times the size of an Octant
-	startSize = Math.max((9*this.octantSize), (this.maxSize()/4));
-
 	// check to make sure the requested Voctopus size is sane
 	maxP = Math.pow(2, schema.find((prop) => prop.label === "pointer").length*8);
-	if(this.maxSize() > maxP) throw new Error("Voctant#constructor: requested a depth of "+depth+" but that would exceed the schema's pointer limitations of "+maxP);
+	if(maxSize > maxP) throw new Error("Voctant#constructor: requested a depth of "+depth+" but that would exceed the schema's pointer limitations of "+maxP);
 
 	/**
-	 * The formula for the total size of a fully dense octree is the sum of 
-	 * powers of 8 up to 8^depth * (octantSize) bytes. We optimistically assume that the 
-	 * octree is only about 1/8th dense, and expand it if we have to. This is 
-	 * based on the assumpton that the top half of a tree is probably sky, and the 
-	 * bottom half is probably fairly sparse.
+	 * Set up the ArrayBuffer as a power of two, so that it can be used as a WebGL
+	 * texture more efficiently. The minimum size should be keyed to the minimum octant
+	 * size times nine because that corresponds to a tree of depth 2, the minimum useful
+	 * tree. Optimistically assume that deeper trees will be mostly sparse, which should
+	 * be true for very large trees (and for small trees, expanding the buffer won't
+	 * be as expensive).
 	 */
+	startSize = npot(Math.max((9*this.octantSize), maxSize/8));
 	try {
 		this.buffer = new ArrayBuffer(startSize);
 		this.buffer.version = 0;
@@ -234,38 +212,31 @@ Voctopus.prototype.prune = function() {
 	}
 }
 
-Voctopus.prototype.maxSize = function() {
-	return sump8(this.depth)*this.octantSize;
-}
-
 /**
  * Expands the internal storage buffer. This is a VERY EXPENSIVE OPERATION and
- * should be avoided until neccessary. Could result in out of memory errors.
- * TODO: verify data integrity in test 
+ * should be avoided until neccessary.
  *
  * @param this.depth {int} max depth of tree
  * @return true if the voctopus was expanded, otherwise false
  */
 Voctopus.prototype.expand = function() {
-	var maxSize, s, tmp, tmpdv, dv, mod, len, i;
-	maxSize = this.maxSize();
-	dv = this.view;
-	len = this.buffer.byteLength;
-	// derive last sparse factor from current this.buffer length, then decrement it
-	s = ~~(maxSize/len)-1;
-	// don't divide by zero, that would be bad
-	if(s < 1) return false; //throw new Error("tried to expand a voctopus, but it's already at maximum size - this means something has gone horribly wrong!");
-	tmp = new ArrayBuffer(~~(maxSize/s));
-	tmpdv = new DataView(tmp);
-	mod = len%8;
-	// we can't rely on ArrayBuffer.transfer yet, but we can at least read 64 bits at a time
-	for(i = 0; i < len-mod; i+=8) tmpdv.setFloat64(i, dv.getFloat64(i));
-	// get any leftovers
-	for(i = (mod-len)*-1; i < len; i++) tmpdv.setUint8(i, dv.getUint8(i));
+	var dv = this.view, buffer = this.buffer, i, s, tmp, tmpdv;
+	s = buffer.byteLength * 2;
+	if(s > npot(this.maxSize)) return false;
+	tmp = new ArrayBuffer(s);
+	tmp.transfer(buffer);
+	//tmp = expandArrayBuffer(buffer, s); //new ArrayBuffer(s);
+	/*
+	if(CAN_ABTRANSFER) tmp.transfer(buffer);
+	else { // we can't rely on ArrayBuffer.transfer yet, but we can at least read 64 bits at a time
+		tmpdv = new DataView(tmp);
+		for(i = 0; i < buffer.byteLength; i+=8) tmpdv.setFloat64(i, dv.getFloat64(i));
+	}
 	tmp.nextIndex = parseInt(this.buffer.nextIndex);
 	tmp.version = this.buffer.version+1;
+	*/
 	this.buffer = tmp;
-	this.view = tmpdv;
+	this.view = new DataView(this.buffer);
 	return true;
 }
 
@@ -302,6 +273,4 @@ Voctopus.prototype.octantOffset = function(v, d) {
  */
 if(typeof(module) !== "undefined") {
 	module.exports.Voctopus = Voctopus;
-	// expose the extended DataView for testing
-	module.exports.ExtDV = DataView;
 }
