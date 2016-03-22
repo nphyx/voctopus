@@ -21,6 +21,14 @@ gulp.task("doc", function (cb) {
 	});
 });
 
+gulp.task("benchmark", function(cb) {
+	exec("browserify -t babelify src/voctopus.benchmark.js | uglifyjs > dist/voctopus.benchmark.js && node dist/voctopus.benchmark.js", function(err, stdout, stderr) {
+		console.log(stderr);
+		console.log(stdout);
+		cb(err);
+	});
+});
+
 gulp.task("test", function() {
 	return gulp.src(["test/*.js"])
 	.pipe(mocha({
