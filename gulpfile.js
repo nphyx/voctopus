@@ -20,8 +20,39 @@ gulp.task("doc", function (cb) {
 		cb(err);
 	});
 });
+
 gulp.task("test", function() {
 	return gulp.src(["test/*.js"])
+	.pipe(mocha({
+		bail:true,
+		compilers: {
+			js: babelRegister
+		}
+	}))
+});
+
+gulp.task("test:core", function() {
+	return gulp.src(["test/voctopus.core.test.js"])
+	.pipe(mocha({
+		bail:true,
+		compilers: {
+			js: babelRegister
+		}
+	}))
+});
+
+gulp.task("test:util", function() {
+	return gulp.src(["test/voctopus.util.test.js"])
+	.pipe(mocha({
+		bail:true,
+		compilers: {
+			js: babelRegister
+		}
+	}))
+});
+
+gulp.task("test:schema", function() {
+	return gulp.src(["test/voctopus.schema.test.js"])
 	.pipe(mocha({
 		bail:true,
 		compilers: {
