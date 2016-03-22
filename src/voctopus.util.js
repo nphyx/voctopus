@@ -131,6 +131,57 @@ function coordinateSpace(depth) {
 	return Math.pow(2, depth);
 }
 
+function getterFactory(size, offset, view) {
+	var f;
+	switch(size) {
+		case 1:
+			f = DataView.prototype.getUint8;
+		break;
+		case 2:
+			f = DataView.prototype.getUint16;
+		break;
+		case 3:
+			f = DataView.prototype.getUint24;
+		break;
+		case 4:
+			f = DataView.prototype.getUint32;
+		break;
+		case 8: 
+			f = DataView.prototype.getFloat64;
+		break;
+		default:
+			throw new Error("invalid property size "+size);
+	}
+	return function(pointer) {
+		return f.call(view, pointer+offset);
+	}
+}
+
+function setterFactory(size, offset, view) {
+	var f;
+	switch(size) {
+		case 1:
+			f = DataView.prototype.setUint8;
+		break;
+		case 2:
+			f = DataView.prototype.setUint16;
+		break;
+		case 3:
+			f = DataView.prototype.setUint24;
+		break;
+		case 4:
+			f = DataView.prototype.setUint32;
+		break;
+		case 8: 
+			f = DataView.prototype.setFloat64;
+		break;
+		default:
+			throw new Error("invalid property size "+size);
+	}
+	return function(pointer, value) {
+		return f.call(view, pointer+offset, value);
+	}
+}
 /**
  * Polyfill for ArrayBuffer.transfer. Uses DataView setter/getters to make transfers
  * as fast as possible. Still slow with large buffers, but less slow than copying
@@ -170,3 +221,5 @@ module.exports.maxOctreeDensityFactor = maxOctreeDensityFactor;
 module.exports.octantIdentity = octantIdentity;
 module.exports.npot = npot;
 module.exports.loop3D = loop3D;
+module.exports.getterFactory = getterFactory;
+module.exports.setterFactory = setterFactory;
