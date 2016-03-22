@@ -1,7 +1,7 @@
 "use strict";
 const schemas = require("./voctopus.schemas");
-const util = require("../src/voctopus.util.js");
-const {maxOctreeSize, npot} = util;
+const {fullOctreeSize, octantIdentity, npot} = require("../src/voctopus.util.js");
+const MAX_BUFFER = 1024*1024*1024*512;
 
 /**
  * Voctopus Core
@@ -29,7 +29,7 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	 */
 	octantSize = schema.reduce((prev, cur) => prev += cur.length, 0);
 	octetSize = octantSize * 8;
-	maxSize = maxOctreeSize(depth, octantSize);
+	maxSize = fullOctreeSize(octantSize, depth);
 
 	// define public properties now
 	Object.defineProperties(this, {
@@ -47,10 +47,6 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	// we'll initialize the first octet below, so start at the next one
 	nextOctet = octetSize+octantSize; 
 
-	// check to make sure the requested Voctopus size is sane
-	maxP = Math.pow(2, schema.find((prop) => prop.label === "pointer").length*8);
-	if(maxSize > maxP) throw new Error("Voctant#constructor: requested a depth of "+depth+" but that would exceed the schema's pointer limitations of "+maxP);
-
 	/**
 	 * Set up the ArrayBuffer as a power of two, so that it can be used as a WebGL
 	 * texture more efficiently. The minimum size should be keyed to the minimum octant
@@ -59,8 +55,9 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	 * be true for very large trees (and for small trees, expanding the buffer won't
 	 * be as expensive).
 	 */
-	startSize = npot(Math.max((9*this.octantSize), maxSize/8));
+	startSize = npot(Math.max((9*this.octantSize), Math.min(maxSize/8, 1024*1024*1024*512)));
 	try {
+		// start with a 1mb buffer
 		this.buffer = new ArrayBuffer(startSize);
 		this.buffer.version = 0;
 	}
@@ -98,7 +95,7 @@ Voctopus.prototype.traverse = function(v, init = false) {
 			nextOctet = this.getEmptyOctet();
 			this.setProperty(cursor, pointer, nextOctet);
 		}
-		if(nextOctet) cursor = nextOctet+this.octantOffset(v, ++d);
+		if(nextOctet) cursor = nextOctet+octantIdentity(v, this.depth - ++d)*this.octantSize;
 	}
 	while(nextOctet !== 0 && d < this.depth);
 	return cursor;
@@ -120,7 +117,7 @@ Voctopus.prototype.walk = function(v, init = false) {
 			stack[d] = this.getEmptyOctet();
 			this.setProperty(cursor, pointer, stack[d]);
 		}
-		if(stack[d] !== 0) cursor = stack[d]+this.octantOffset(v, d+1);
+		if(stack[d] !== 0) cursor = stack[d]+octantIdentity(v, this.depth - d+1)*this.octantSize;
 		d++;
 	}
 	while(d < this.depth);
@@ -215,26 +212,15 @@ Voctopus.prototype.prune = function() {
 /**
  * Expands the internal storage buffer. This is a VERY EXPENSIVE OPERATION and
  * should be avoided until neccessary.
- *
- * @param this.depth {int} max depth of tree
- * @return true if the voctopus was expanded, otherwise false
+ * @return {bool} true if the voctopus was expanded, otherwise false
  */
 Voctopus.prototype.expand = function() {
-	var dv = this.view, buffer = this.buffer, i, s, tmp, tmpdv;
+	var buffer = this.buffer, s, tmp, max;
 	s = buffer.byteLength * 2;
-	if(s > npot(this.maxSize)) return false;
+	max = Math.min(MAX_BUFFER, npot(this.maxSize));
+	if(s > max) return false;
 	tmp = new ArrayBuffer(s);
 	tmp.transfer(buffer);
-	//tmp = expandArrayBuffer(buffer, s); //new ArrayBuffer(s);
-	/*
-	if(CAN_ABTRANSFER) tmp.transfer(buffer);
-	else { // we can't rely on ArrayBuffer.transfer yet, but we can at least read 64 bits at a time
-		tmpdv = new DataView(tmp);
-		for(i = 0; i < buffer.byteLength; i+=8) tmpdv.setFloat64(i, dv.getFloat64(i));
-	}
-	tmp.nextIndex = parseInt(this.buffer.nextIndex);
-	tmp.version = this.buffer.version+1;
-	*/
 	this.buffer = tmp;
 	this.view = new DataView(this.buffer);
 	return true;
@@ -242,7 +228,7 @@ Voctopus.prototype.expand = function() {
 
 /**
  * Initializes the values of an entire octet to 0.
- * @param o {int} byteOffset for start of octet
+ * @param {int} o byteOffset for start of octet
  *
  */
 Voctopus.prototype.initializeOctet = function(o) {
@@ -253,19 +239,6 @@ Voctopus.prototype.initializeOctet = function(o) {
 	for(i = 0; i < s; i++) {
 		v.setUint8(i, 0); 
 	}
-}
-
-/**
- * Returns the identity (0-7) of the suboctant at depth d, position v
- * @param v global coordinate of voxel 
- * @param d depth to check
- */
-Voctopus.prototype.octantOffset = function(v, d) {
-	d = this.depth - d;
-	return (((v[2] >>> d) & 1) << 2 | 
-					((v[1] >>> d) & 1) << 1 |
-					((v[0] >>> d) & 1) 
-				 )*this.octantSize;
 }
 
 /**

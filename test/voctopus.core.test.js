@@ -17,15 +17,14 @@ describe("Voctopus", function() {
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
 		voc.should.have.property("maxSize");
-		(typeof(voc.octantOffset)).should.equal("function", "method octantOffset not implemented");
-		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel not implemented");
-		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel not implemented");
-		(typeof(voc.getOctant)).should.equal("function", "method getOctant not implemented");
-		(typeof(voc.setOctant)).should.equal("function", "method setOctant not implemented");
-		(typeof(voc.getProperty)).should.equal("function", "method getProperty not implemented");
-		(typeof(voc.setProperty)).should.equal("function", "method setProperty not implemented");
-		(typeof(voc.allocateOctet)).should.equal("function", "method allocateOctet not implemented");
-		(typeof(voc.expand)).should.equal("function", "method expand not implemented");
+		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel implemented");
+		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel implemented");
+		(typeof(voc.getOctant)).should.equal("function", "method getOctant implemented");
+		(typeof(voc.setOctant)).should.equal("function", "method setOctant implemented");
+		(typeof(voc.getProperty)).should.equal("function", "method getProperty implemented");
+		(typeof(voc.setProperty)).should.equal("function", "method setProperty implemented");
+		(typeof(voc.allocateOctet)).should.equal("function", "method allocateOctet implemented");
+		(typeof(voc.expand)).should.equal("function", "method expand implemented");
 	});
 	it("should implement octant schemas", function() {
 		var prop;
@@ -70,48 +69,6 @@ describe("Voctopus", function() {
 		voc = new Voctopus(8);
 		voc.maxSize.should.eql(19173961*voxSize);
 	});
-	it("should refuse to create an octree larger than the schema's pointer can handle", function() {
-		var schema;
-		// make a contrived schema with a tiny pointer
-		schema = [{label:"value",length:1,offset:0},{label:"pointer",length:1,offset:1}];
-		// try to make a Voctopus bigger than 256 elements (this would be 
-		(function() {new Voctopus(3, schema)}).should.throwError();
-	});
-	it("should always return 0 at depth 0 for octantOffset", function() {
-		voc.octantOffset([ 0, 0, 0], 0).should.equal(0);
-		voc.octantOffset([31, 0, 0], 0).should.equal(0);
-		voc.octantOffset([ 0,31, 0], 0).should.equal(0);
-		voc.octantOffset([31,31, 0], 0).should.equal(0);
-		voc.octantOffset([ 0, 0,31], 0).should.equal(0);
-		voc.octantOffset([31, 0,31], 0).should.equal(0);
-		voc.octantOffset([ 0,31,31], 0).should.equal(0);
-		voc.octantOffset([31,31,31], 0).should.equal(0);
-	});
-	it("should yield expected octant offsets (range 0-7 * octantSize) for a position vector", function() {
-		var i;
-		// These should have the same identity at any depth
-		for(i = 1; i < d; i++) {
-			voc.octantOffset([ 0, 0, 0], i).should.equal(0*voc.octantSize);
-			voc.octantOffset([31, 0, 0], i).should.equal(1*voc.octantSize);
-			voc.octantOffset([ 0,31, 0], i).should.equal(2*voc.octantSize);
-			voc.octantOffset([31,31, 0], i).should.equal(3*voc.octantSize);
-			voc.octantOffset([ 0, 0,31], i).should.equal(4*voc.octantSize);
-			voc.octantOffset([31, 0,31], i).should.equal(5*voc.octantSize);
-			voc.octantOffset([ 0,31,31], i).should.equal(6*voc.octantSize);
-			voc.octantOffset([31,31,31], i).should.equal(7*voc.octantSize);
-		}
-		// for d == 2, coordinates corresponding to octet voc.octantSize at d == 1)
-		for(i = 2; i < d; i++) {
-			voc.octantOffset([ 0, 0, 0], 2).should.equal(0*voc.octantSize);
-			voc.octantOffset([15, 0, 0], 2).should.equal(1*voc.octantSize);
-			voc.octantOffset([ 0,15, 0], 2).should.equal(2*voc.octantSize);
-			voc.octantOffset([15,15, 0], 2).should.equal(3*voc.octantSize);
-			voc.octantOffset([ 0, 0,15], 2).should.equal(4*voc.octantSize);
-			voc.octantOffset([15, 0,15], 2).should.equal(5*voc.octantSize);
-			voc.octantOffset([ 0,15,15], 2).should.equal(6*voc.octantSize);
-			voc.octantOffset([15,15,15], 2).should.equal(7*voc.octantSize);
-		}
-	});
 	it("should generate a buffer of the correct length", function() {
 		// should make a buffer of max size if the max size is less than 73*octantSize
 		let voc = new Voctopus(1);
@@ -120,11 +77,6 @@ describe("Voctopus", function() {
 		for(var i = 2; i < 10; i++) {
 			voc = new Voctopus(i);
 			voc.buffer.byteLength.should.eql(npot(voc.maxSize/8), "buffer is nearest power of two to one eighth of max length "+voc.maxSize);
-		}
-		// until we implement nested octrees 9 will be the max size for the RGBMP Voctant
-		var fun = () => new Voctopus(i);
-		for(i = 10; i < 16; i++) {
-			(fun).should.throwError();
 		}
 	});
 	it("should expand the buffer using expand", function() {
