@@ -32,6 +32,7 @@ function defineAccessors(voc) {
 }
 
 function Voctopus(depth, schema = schemas.RGBM) {
+	if(!depth) throw new Error("Voctopus#constructor must be given a depth");
 	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxSize;
 
 	/**
