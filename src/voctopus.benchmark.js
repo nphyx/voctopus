@@ -3,7 +3,6 @@ const Voctopus = require("./voctopus.core.js").Voctopus;
 const VoctopusSchemas = require("./voctopus.schemas.js");
 const loop3D = require("./voctopus.util.js").loop3D;
 // use a lot of globals because it has less impact on run time
-var voc, count, size, i, d, voxel, ptr, cb, rtime, wtime, rows, results, schema;
 const testList = ["object", "direct"];
 
 /* Setup */
@@ -172,24 +171,50 @@ function benchmark() {
 	console.log(table(cellw, rows));
 }
 
-(function() {
-	let schema = schemaList[1];
+function newbench() {
+	let start, rtime, wtime;
+	let count = 0, i = 0;
+	/*
+	let {name, dmin, dmax, tests} = schemaList[1];
 	let testName = "direct";
 	let rows = [];
 	let cellw = 8;
+	let schema = VoctopusSchemas[name];
+	console.log("\nSCHEMA "+name);
+	console.log("======="+("=").repeat(name.length));
 	rows.push([testName].concat(new Array(5).fill((" ").repeat(cellw))));
-	rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
-	let d = schema.dmin;
-	for(let max = schema.dmax; d < max; ++d) {
-		rows.push(testRW(testName, schema, d));
+	rows.push(["Depth", "Write", "Read", "Voxels", "Octets", "Memory"]);
+	console.log("\nR/W Tests\n---------");
+	*/
+	let readcb = function(pos) {
+		ptr = voc.traverse(pos, true);
+		voc.getVoxel(ptr);
+		++count;
+		++i;
 	}
-	console.log(table(cellw, rows));
-})();
+	for(let d = 5; d <= 7; ++d) {
+		voc = new Voctopus(d, schema);
+		let res = 1;
+		while(res) res = voc.expand();
+		size = Math.pow(2, d - 1);
+		start = time();
+		loop3D(size, {y:fy, z:readcb});
+		rtime = elapsed(start);
+		count = 0; // reset voxel counter
+		wtime = 0; //stopwatch(cbw);
+		//rows.push([d, wtime, rtime, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"]);
+	}
+	//console.log(table(cellw, rows));
+}
+newbench();
+
 
 
 /* Begin Benchmarks */
+/*
 schema = schemaList[1];
 benchmark();
+*/
 /*
 for(let i in schemaList) {
 	schema = schemaList[i];
