@@ -8,7 +8,7 @@ const testList = ["object", "direct"];
 const readObj = (voc, pos) => voc.getVoxel(pos);
 /* Setup */
 const schemaList = [
-	{name:"RGBM", dmin:4, dmax:7, tests:{
+	{name:"RGBM", dmin:4, dmax:8, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
@@ -30,7 +30,7 @@ const schemaList = [
 			}
 		}
 	}}, 
-	{name:"I8M24P", dmin:4, dmax:7, tests:{
+	{name:"I8M24P", dmin:4, dmax:8, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {m:i})
@@ -46,7 +46,7 @@ const schemaList = [
 			}
 		}
 	}},
-	{name:"I8M16P", dmin:3, dmax:5, tests:{
+	{name:"I8M16P", dmin:3, dmax:6, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {m:i})
@@ -66,12 +66,23 @@ const schemaList = [
 
 /* util functions */
 let fmt = (cellw, cells) => {
-	return "| "+cells.map((cell) => ((" ").repeat(cellw)+cell).slice(-cellw))
-				 .join(" | ")+" |";
+	return "|"+cells.map((cell) => ((" ").repeat(cellw)+cell).slice(-cellw))
+				 .join("|")+"|";
 }
 
 // make table border
-let border = (cellw, cells) => "+"+(("-").repeat(cellw+2)+"+").repeat(cells);
+//let border = (cellw, cells) => "+"+(("-").repeat(cellw+2)+"+").repeat(cells);
+//
+
+// make table dividers
+let divider = (cellw, cells) => cells.map((cell) => {
+	switch(cell) {
+		case "l": return ":"+(("-").repeat(cellw-2))+"-";
+		case "r": return "-"+(("-").repeat(cellw-2))+":";
+		case "c": return ":"+(("-").repeat(cellw-2))+":";
+		default: return ("-").repeat(cellw);
+	}
+});
 
 // range from a to b
 let range = (a, b) => {
@@ -81,11 +92,9 @@ let range = (a, b) => {
 }
 
 // make table
-let table = (cellw, rows) => {
+function table(cellw, rows) {
 	let out = "";
-	out += border(cellw, rows[0].length);
 	out += "\n"+rows.map((row) => fmt(cellw, row)).join("\n");
-	out += "\n"+border(cellw, rows[0].length);
 	return out;
 }
 
@@ -181,6 +190,7 @@ function benchmark(schema) {
 	let rows = [];
 	console.log("\nInitialization Tests\n--------------------");
 	rows.push(["Depth"].concat(range(dmin, dmax)));
+	rows.push(divider(cellw, new Array(dmax-dmin+2).fill("r")));
 	rows.push(["Init"].concat(iterd(dmin, dmax, cbInit.bind(null, schema))));
 	rows.push(["Expand"].concat(iterd(dmin, dmax, cbExpand.bind(null, schema))));
 	console.log(table(cellw, rows));
@@ -188,10 +198,11 @@ function benchmark(schema) {
 	// Read/Write Benchmarks 
 	console.log("\nR/W Tests\n---------");
 	rows = [];
+	rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
+	rows.push(divider(cellw, ["c","r","r","r","r","r"]));
 	testList.forEach((testName) => {
 		d = dmin;
-		rows.push([testName].concat(new Array(5).fill((" ").repeat(cellw))));
-		rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
+		rows.push(["*"+testName+"*"].concat(new Array(5).fill((" ").repeat(cellw))));
 		for(let max = dmax; d <= max; ++d) {
 			rows.push(testRW(testName, schema, d));
 		}
@@ -201,12 +212,41 @@ function benchmark(schema) {
 	console.log("\nMemory Tests\n------------");
 	rows = [];
 	rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
+	rows.push(divider(cellw, ["c","r","r","r","r","r"]));
 	d = dmin;
 	for(let max = dmax; d <= max; ++d) {
 		rows.push(testRW("direct", schema, d, false));
 	}
 	console.log(table(cellw, rows));
 }
+
+console.log(`
+Benchmarks
+==========
+This page includes some benchmarks run against the current version of Voctopus.
+They're useful for comparing the performance and memory use characteristics of
+different schemas, and as a way to measure the impact of code changes. A brief
+description of each test suite follows.
+
+Init Tests
+----------
+These tests cover the time it takes to initialize a new Voctopus, and how long
+it takes to expand it to full size.
+
+R/W Tests
+---------
+These tests measure how long reads and writes take using different interfaces. The
+octree is expanded to full size so that expansions won't interrupt r/w.
+
+* *Object*: how long it takes to read/write using the getVoxel and setVoxel methods
+* *Direct*: time to write using the direct getter/setter methods (Voc.set[field])
+
+Memory Tests
+------------
+These tests measure r/w speeds without expansion, and how much memory is consumed
+by Voctopus' on-demand expansion. The direct-write interfaces are used here.
+
+`);
 
 /* Begin Benchmarks */
 for(let i in schemaList) {
