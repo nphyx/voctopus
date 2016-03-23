@@ -59,7 +59,7 @@ let fzro = (pos) => {
 }
 // write object
 let fzwo = (pos) => {
-	voc.setVoxel(pos, {r:i,g:i+1,b:i+2,material:i+3});
+	voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3});
 	i++;
 	count++;
 }
@@ -71,13 +71,13 @@ let fzwr = {
 		voc.set.r(ptr, 32);
 		voc.set.g(ptr, 128);
 		voc.set.b(ptr, 232);
-		voc.set.material(ptr, i);
+		voc.set.m(ptr, i);
 		i++;
 		count++;
 	},
 	I8M: (pos) => {
 		ptr = voc.traverse(pos, true);
-		voc.set.material(ptr, i);
+		voc.set.m(ptr, i);
 		i++;
 		count++;
 	}
@@ -90,13 +90,13 @@ let fzrr = {
 		voc.get.r(ptr);
 		voc.get.g(ptr);
 		voc.get.b(ptr);
-		voc.get.material(ptr);
+		voc.get.m(ptr);
 		i++;
 		count++;
 	},
 	I8M: (pos) => {
 		ptr = voc.traverse(pos);
-		voc.get.material(ptr);
+		voc.get.m(ptr);
 		i++;
 		count++;
 	}

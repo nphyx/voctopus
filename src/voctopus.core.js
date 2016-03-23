@@ -83,12 +83,12 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	defineAccessors(this);
 
 	// initialize the root node
-	this.set.pointer(0, this.octantSize);
+	this.set.p(0, this.octantSize);
 	this.voxel = {};
 	this.fields = [];
 	for(let i = 0, l = this.schema.length; i < l; ++i) {
 		let label = this.schema[i].label;
-		if(label !== "pointer") {
+		if(label !== "p") {
 			this.fields.push(label);
 			this.voxel[label] = 0;
 		}
@@ -105,8 +105,8 @@ Voctopus.prototype.traverse = function(v, init = false) {
 	// we can skip the first octant since its children are at a known address
 	var d = 1, nextOctet = 0, cursor = this.octantSize, bLength = this.buffer.byteLength; 
 		// object property lookups can be really slow so predefine things here
-	var pGet = this.get.pointer, 
-		pSet = this.set.pointer,
+	var pGet = this.get.p, 
+		pSet = this.set.p,
 		depth = this.depth,
 		octantSize = this.octantSize, 
 		getEmpty = this.getEmptyOctet.bind(this);
@@ -114,7 +114,7 @@ Voctopus.prototype.traverse = function(v, init = false) {
 	// walk the tree til we reach the end of a branch
 	do {
 		if(cursor+octantSize < bLength) {
-			nextOctet = pGet(cursor); //this.getProperty(cursor, pointer);
+			nextOctet = pGet(cursor);
 		}
 		else nextOctet = 0;
 		if(init && !nextOctet) {
@@ -141,8 +141,8 @@ Voctopus.prototype.walk = function(v, init = false) {
 	var d = 1, cursor = this.octantSize, bLength = this.buffer.byteLength;
 		// object property lookups can be really slow so predefine things here
 	var 
-		pGet = this.get.pointer, 
-		pSet = this.set.pointer, 
+		pGet = this.get.p, 
+		pSet = this.set.p, 
 		depth = this.depth,
 		octantSize = this.octantSize, 
 		getEmpty = this.getEmptyOctet.bind(this), 
@@ -151,7 +151,7 @@ Voctopus.prototype.walk = function(v, init = false) {
 	// walk the tree til we reach the end of a branch
 	do {
 		if(cursor+octantSize < bLength) {
-			stack[d] = pGet(cursor); //this.getProperty(cursor, pointer);
+			stack[d] = pGet(cursor);
 		}
 		else stack[d] = 0;
 		if(init && stack[d] === 0) {
@@ -245,7 +245,7 @@ Voctopus.prototype.allocateOctet = function() {
  * @return {bool} true on success or nothing to be done, false on failure
  */
 Voctopus.prototype.prune = function() {
-	var d = 0, cursor = this.octantSize, nextOctet = 0, pointer = this.schema.find((el) => el.label === "pointer");
+	var d = 0, cursor = this.octantSize, nextOctet = 0, pointer = this.schema.find((el) => el.label === "p");
 	function checkOctet() {
 			
 	}
