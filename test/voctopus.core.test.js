@@ -1,15 +1,18 @@
 "use strict";
 require("should");
 const Voctopus = require("../src/voctopus.core").Voctopus;
-const schemas = require("../src/voctopus.schemas.js");
-const util = require("../src/voctopus.util.js");
-const {loop3D, npot} = util;
+const {loop3D, npot, sump8} = require("../src/voctopus.util.js");
 
 describe("Voctopus", function() {
 	var d, voc;
+	// we haven't tested schemas yet so let's make a stub
+	var schema = [
+		{label:"m",offset:0,length:1},
+		{label:"p",offset:1,length:4}
+	];
 	beforeEach("set up a clean voctopus instance", function() {
 		d = 5;
-		voc = new Voctopus(d, schemas.RGBM);
+		voc = new Voctopus(d, schema);
 	});
 	it("should expose expected interfaces", function() {
 		voc.should.have.property("freedOctets");
@@ -25,76 +28,40 @@ describe("Voctopus", function() {
 		(typeof(voc.expand)).should.equal("function", "method expand implemented");
 	});
 	it("should implement octant schemas", function() {
-		var prop;
-		// default schema: RGBM
-		for(prop of voc.schema) {
-			prop.should.have.property("label");
-			prop.should.have.property("offset");
-			prop.should.have.property("length");
-		}
-		(voc.schema.find((el) => el.label === "p") === "undefined").should.be.false();
-		voc.octantSize.should.equal(8);
-		voc.octetSize.should.equal(64);
-		voc.nextOctet.should.equal(72);
-		// now check I8M24P schema
-		voc = new Voctopus(5, schemas.I8M24P);
-		for(prop of voc.schema) {
-			prop.should.have.property("label");
-			prop.should.have.property("offset");
-			prop.should.have.property("length");
-		}
-		(voc.schema.find((el) => el.label === "p") === "undefined").should.be.false();
-		voc.octantSize.should.equal(4);
-		voc.octetSize.should.equal(32);
-		voc.nextOctet.should.equal(36);
+		(voc.schema).should.eql(schema);
+		voc.octantSize.should.equal(5);
+		voc.octetSize.should.equal(40);
+		voc.nextOctet.should.equal(45);
 	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
 		var voxSize = voc.octantSize;
-		voc = new Voctopus(1);
-		voc.maxSize.should.eql(9*voxSize);
-		voc = new Voctopus(2);
-		voc.maxSize.should.eql(73*voxSize);
-		voc = new Voctopus(3);
-		voc.maxSize.should.eql(585*voxSize);
-		voc = new Voctopus(4);
-		voc.maxSize.should.eql(4681*voxSize);
-		voc = new Voctopus(5);
-		voc.maxSize.should.eql(37449*voxSize);
-		voc = new Voctopus(6);
-		voc.maxSize.should.eql(299593*voxSize);
-		voc = new Voctopus(7);
-		voc.maxSize.should.eql(2396745*voxSize);
-		voc = new Voctopus(8);
-		voc.maxSize.should.eql(19173961*voxSize);
+		for(let i = 1; i < 9; ++i) {
+			voc = new Voctopus(i, schema);
+			voc.maxSize.should.eql(sump8(i)*voxSize);
+		}
 	});
 	it("should initialize the root pointer to the correct offset", function() {
 		var dv = voc.view;
-		dv.getUint32(4).should.eql(8, "root octant's pointer is pointing at the right offset");
+		dv.getUint32(1).should.eql(5, "root octant's pointer is pointing at the right offset");
 	});
 	it("should correctly implement pointer getters and setters", function() {
 		// implemented?
-		voc.get.r.should.be.type("function");
-		voc.get.g.should.be.type("function");
-		voc.get.b.should.be.type("function");
 		voc.get.m.should.be.type("function");
 		voc.get.p.should.be.type("function");
-		voc.set.r.should.be.type("function");
-		voc.set.g.should.be.type("function");
-		voc.set.b.should.be.type("function");
 		voc.set.m.should.be.type("function");
 		voc.set.p.should.be.type("function");
 
-		voc.get.p(0).should.eql(8);
-		voc.set.p(8, 72);
-		voc.get.p(8).should.eql(72);
+		voc.get.p(0).should.eql(5);
+		voc.set.p(5, 45);
+		voc.get.p(5).should.eql(45);
 	});
 	it("should generate a buffer of the correct length", function() {
 		// should make a buffer of max size if the max size is less than 73*octantSize
-		let voc = new Voctopus(1);
-		voc.buffer.byteLength.should.equal(128);
+		let voc = new Voctopus(1, schema);
+		voc.buffer.byteLength.should.equal(64);
 		// anything larger than this should start out at a quarter of the max size
 		for(var i = 2; i < 10; i++) {
-			voc = new Voctopus(i);
+			voc = new Voctopus(i, schema);
 			voc.buffer.byteLength.should.eql(npot(voc.maxSize/8), "buffer is nearest power of two to one eighth of max length "+voc.maxSize);
 		}
 	});
@@ -102,7 +69,7 @@ describe("Voctopus", function() {
 		var i, voc, ms;
 		for(i = 3; i < 8; i++) {
 			voc = null;
-			voc = new Voctopus(i);
+			voc = new Voctopus(i, schema);
 			ms = voc.maxSize;
 			voc.buffer.byteLength.should.equal(npot(~~(ms/8)));
 			voc.expand();
@@ -115,33 +82,33 @@ describe("Voctopus", function() {
 		}
 	});
 	it("should traverse the octree using traverse, optionally initializing octets as it goes", function() {
-		voc.traverse([0,0,0]).should.equal(8);
-		voc.traverse([0,0,0], true).should.equal(264);
-		voc.traverse([0,0,0]).should.equal(264);
+		voc.traverse([0,0,0]).should.equal(5);
+		voc.traverse([0,0,0], true).should.equal(165);
+		voc.traverse([0,0,0]).should.equal(165);
+	});
+	it("should walk the octree using walk, returning an array of pointers", function() {
+		voc.walk([0,0,0]).should.eql(new Uint32Array([5,0,0,0,0]));
+		voc.walk([0,0,0], true).should.eql(new Uint32Array([5, 45, 85, 125, 165]));
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
 		var dv = voc.view;
 		// this should make a tree going down to 0,0
-		voc.setVoxel([0,0,0], {r:31,g:63,b:255,m:1});
+		voc.setVoxel([0,0,0], {m:1});
 		// look at the raw data, since we haven't yet tested getVoxel
-		dv.getUint32(12).should.eql(72, "octant's pointer at depth 1 is pointing at the right offset");
-		dv.getUint32(76).should.eql(136, "octant's pointer at depth 2 is pointing at the right offset");
-		dv.getUint32(140).should.eql(200, "octant's pointer at depth 3 is pointing at the right offset");
-		dv.getUint32(204).should.eql(264, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint8(264).should.eql(31, "voxel's r value is correct");
-		dv.getUint8(265).should.eql(63, "voxel's g value is correct");
-		dv.getUint8(266).should.eql(255, "voxel's b value is correct");
-		dv.getUint8(267).should.eql(1, "voxel's material value is correct");
-		dv.getUint32(268).should.eql(0, "voxel's pointer value is correct");
+		dv.getUint32(6).should.eql(45, "octant's pointer at depth 1 is pointing at the right offset");
+		dv.getUint32(46).should.eql(85, "octant's pointer at depth 2 is pointing at the right offset");
+		dv.getUint32(86).should.eql(125, "octant's pointer at depth 3 is pointing at the right offset");
+		dv.getUint32(126).should.eql(165, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint8(165).should.eql(1, "voxel's material value is correct");
+		dv.getUint32(166).should.eql(0, "voxel's pointer value is correct");
 	});
 	it("should maintain integrity of the buffer during an expansion", function() {
 		this.timeout(10000);
 		var i, voc, size, index, count = 0, a, b, da, db;
-		voc = new Voctopus(6, schemas.RGBM);
+		voc = new Voctopus(6, schema);
 		loop3D(size, {
-			y:() => i = 0, 
-			z:(pos) => {
-				index = voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3});
+			y:() => i = 0, z:(pos) => {
+				index = voc.setVoxel(pos, {m:i});
 				i++;
 				count++; 
 			}
@@ -156,71 +123,13 @@ describe("Voctopus", function() {
 			da.getUint8(i).should.eql(db.getUint8(i));
 		}
 	});
-	it("should walk the octree using walk, returning an array of pointers", function() {
-		voc.walk([0,0,0]).should.eql(new Uint32Array([8,0,0,0,0]));
-		voc.walk([0,0,0], true).should.eql(new Uint32Array([8, 72, 136, 200, 264]));
-	});
-	it("should get voxel data after setting it using getVoxel in RGBM schema", function() {
-		this.timeout(10000);
-		var size, i, index, time, count = 0;
-		voc = new Voctopus(6, schemas.RGBM);
-		size = Math.pow(2, voc.depth - 1);
-		time = new Date().getTime();
-		loop3D(size, {
-			y:() => i = 0, 
-			z:(pos) => {
-				index = voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3});
-				i++;
-				count++; 
-			}
-		});
-		time = new Date().getTime() - time;
-		console.log("Time to populate RGBM:",time/1000+"s"," total voxels:",count);
-		time = new Date().getTime();
-		loop3D(size, {
-			y:() => i = 0, 
-			z:(pos) => {
-				voc.getVoxel(pos).should.eql({r:i, g:i+1, b:i+2, m:i+3});
-				i++;
-			}
-		});
-		time = new Date().getTime() - time;
-		console.log("Time to check:",time/1000+"s");
-	});
-	it("should get voxel data after setting it using getVoxel in I8M24P schema", function() {
-		this.timeout(10000);
-		var size, i, index, time, count = 0;
-		voc = new Voctopus(6, schemas.I8M24P);
-		size = Math.pow(2, voc.depth - 1);
-		time = new Date().getTime();
-		loop3D(size, {
-			y:() => i = 0, 
-			z:(pos) => {
-				index = voc.setVoxel(pos, {m:i});
-				i++;
-				count++; 
-			}
-		});
-		time = new Date().getTime() - time;
-		console.log("Time to populate I8M24P:",time/1000+"s"," total voxels:",count);
-		time = new Date().getTime();
-		loop3D(size, {
-			y:() => i = 0,
-			z:(pos) => {
-				voc.getVoxel(pos).m.should.eql(i);
-				i++;
-			}
-		});
-		time = new Date().getTime() - time;
-		console.log("Time to check:",time/1000+"s");
-	});
 	it("should initialize an octet's data to zero using initializeOctet", function() {
 		var index;
 		// set the voxel first so we're grabbing the right data with getVoxel
 		index = voc.setVoxel([0,0,0], {r:31,g:63,b:127,m:12});
 		// the tree was empty so the start of the leaf octet should be 264 for a tree of depth 5 (calculated externally) 
 		voc.initializeOctet(index); // initialize the octet beginning at offset 1, which is the second down from root octant
-		voc.get(index).should.eql({r:0,g:0,b:0,m:0});
+		voc.get(index).should.eql({m:0});
 	});
 	xit("should prune redundant branches using prune", function() {
 		var i = 0;
