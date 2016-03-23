@@ -5,12 +5,50 @@ const loop3D = require("./voctopus.util.js").loop3D;
 
 /* Setup */
 const schemaList = ["RGBM", "I8M"];
-var start, end, schema, i, voc, count, size, i, n, voxel, ptr, pos = new Float32Array(3);
+const dmin = 4;
+const dmax = 8;
+var start, end, schema, i, voc, count, size, i, n, voxel, ptr;
 
 /* util functions */
-let calcTime = (start, end) =>  ((end-start)/1000).toFixed(3)+"s";
-let inMB = (b) => (b/1024/1024).toFixed(3);
+let fmt = (cellw, cells) => {
+	return "| "+cells.map((cell) => ((" ").repeat(cellw)+cell).slice(-cellw))
+				 .join(" | ")+" |";
+}
+
+// make table border
+let border = (cellw, cells) => "+"+(("-").repeat(cellw+2)+"+").repeat(cells);
+
+// range from a to b
+let range = (a, b) => {
+	let arr = [];
+	for(let x = a; x <= b; x++) arr.push(x);
+	return arr;
+}
+
+// make table
+let table = (cellw, rows) => {
+	let out = "";
+	out += border(cellw, rows[0].length);
+	out += "\n"+rows.map((row) => fmt(cellw, row)).join("\n");
+	out += "\n"+border(cellw, rows[0].length);
+	return out;
+}
+// shortcut for Date().getTime();
 let time = () => new Date().getTime();
+
+// calculate time elapsed
+let elapsed = (start) => ((time()-start)/1000).toFixed(3)+"s";
+
+// calculate octets in voctopus
+let calcOctets = (voc) => {
+	let usedBytes = voc.buffer.byteLength-(voc.buffer.byteLength-voc.nextOctet)-voc.octantSize;
+	return usedBytes / voc.octetSize;
+}
+
+// bytes as mb
+let inMB = (b) => (b/1024/1024).toFixed(3);
+
+// loop3D y func resets i
 let fy = () => i = 0;
 
 // read object
@@ -29,7 +67,7 @@ let fzwo = (pos) => {
 // write raw
 let fzwr = {
 	RGBM: (pos) => {
-		ptr = voc.traverse(pos);
+		ptr = voc.traverse(pos, true);
 		voc.set.r(ptr, 32);
 		voc.set.g(ptr, 128);
 		voc.set.b(ptr, 232);
@@ -38,7 +76,7 @@ let fzwr = {
 		count++;
 	},
 	I8M: (pos) => {
-		ptr = voc.traverse(pos);
+		ptr = voc.traverse(pos, true);
 		voc.set.material(ptr, i);
 		i++;
 		count++;
@@ -64,35 +102,42 @@ let fzrr = {
 	}
 }
 
-
 /* Begin Benchmarks */
 for(n in schemaList) {
+	let rows = [];
+	let cells = [];
+	let cellw = 8;
 	schema = schemaList[n];
-	console.log("SCHEMA "+schema);
+	console.log("\nSCHEMA "+schema);
 	console.log("=================================================");
 
 	/* Initialization benchmarks */ 
-	for(let d = 4; d < 10; ++d) {
+	rows.push(["Depth:"].concat(range(dmin, dmax)));
+	for(let d = dmin; d <= dmax; ++d) {
 		start = time();
 		new Voctopus(d, schemas[schema]);
 		end = time();
-		console.log("Time to initialize at depth", d+":", calcTime(start, end));
+		cells.push(elapsed(start, end));
 	}
-	console.log("");
+	rows.push(["Init"].concat(cells));
 
+	cells = [];
 	/* Expansion benchmarks */
-	for(let d = 4; d < 9; ++d) {
+	for(let d = dmin; d <= dmax; ++d) {
 		voc = new Voctopus(d, schemas[schema]);
 		start = time();
 		let res = 1;
 		while(res) res = voc.expand();
 		end = time();
-		console.log("Time to expand at depth", d+":", calcTime(start, end));
+		cells.push(elapsed(start, end));
 	}
-	console.log("");
+	rows.push(["Expand"].concat(cells));
+	console.log(table(cellw, rows));
 
 	/* Read/Write Benchmarks */
-	console.log("R/W with object interface\n");
+	rows = [];
+	rows.push(["Read", "Write", "Depth", "Voxels", "Octets", "Memory"]);
+	rows.push(["Object"].concat(new Array(5).fill(("-").repeat(cellw))));
 	for(let d = 4; d < 8; ++d) {
 		voc = new Voctopus(d, schemas[schema]);
 		/* expand it first so it won't get slowed down arbitrarily */
@@ -102,26 +147,18 @@ for(n in schemaList) {
 
 		count = 0;
 		start = time();
-		loop3D(size, {
-			y:fy, 
-			z:fzwo
-		});
-		end = time();
-		let mem = inMB(voc.view.byteLength);
-		console.log("Write: depth "+d+", time: "+calcTime(start, end)+", total voxels: "+count+", memory: "+mem+"MB");
+		loop3D(size, {y:fy, z:fzwo});
+		let read = elapsed(start);
 
 		count = 0;
 		start = time();
-		loop3D(size, {
-			y:fy, 
-			z:fzro
-		});
-		end = time();
-		console.log("Read:  depth "+d+", time: "+calcTime(start, end)+", total voxels: "+count+", memory: "+mem+"MB");
+		loop3D(size, {y:fy, z:fzro});
+		let write = elapsed(start);
+		rows.push([read, write, d, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"]);
 	}
-	console.log("");
-	console.log("R/W with direct interface\n");
-	for(let d = 4; d < 8; ++d) {
+
+	rows.push(["Direct"].concat(new Array(5).fill(("-").repeat(cellw))));
+	for(let d = dmin; d < dmax; ++d) {
 		voc = new Voctopus(d, schemas[schema]);
 		/* expand it first so it won't get slowed down arbitrarily */
 		let res = 1;
@@ -130,22 +167,15 @@ for(n in schemaList) {
 
 		count = 0;
 		start = time();
-		loop3D(size, {
-			y:fy, 
-			z:fzwr[schema]
-		});
+		loop3D(size, {y:fy, z:fzwr[schema]});
 		end = time();
-		let mem = inMB(voc.view.byteLength);
-		console.log("Write: depth "+d+", time: "+calcTime(start, end)+", total voxels: "+count+", memory: "+mem+"MB");
+		let read = elapsed(start);
 
 		count = 0;
 		start = time();
-		loop3D(size, {
-			y:fy, 
-			z:fzrr[schema]
-		});
-		end = time();
-		console.log("Read:  depth "+d+", time: "+calcTime(start, end)+", total voxels: "+count+", memory: "+mem+"MB");
+		loop3D(size, {y:fy, z:fzrr[schema]});
+		let write = elapsed(start);
+		rows.push([read, write, d, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"]);
 	}
-	console.log("");
+	console.log(table(cellw, rows));
 }
