@@ -108,19 +108,16 @@ function npot(n) {
  * @return {undefined}
  */
 function loop3D(size, cbs) {
-	var cbx, cby, cbz, x, y, z, pos = new Float32Array(3);
+	var cbx, cby, cbz, vec = new Float32Array(3);
 	cbx = typeof(cbs.x) === "function"?cbs.x:function(){};
 	cby = typeof(cbs.y) === "function"?cbs.y:function(){};
 	cbz = typeof(cbs.z) === "function"?cbs.z:function(){};
-	for(x = 0; x < size; ++x) {
-		pos.set([x,y,z]);
-		cbx(pos);
-		for(y = 0; y < size; ++y) {
-			pos.set([x,y,z]);
-			cby(pos);
-			for(z = 0; z < size; ++z) {
-				pos.set([x,y,z]);
-				cbz(pos);
+	for(vec[0] = 0; vec[0] < size; ++vec[0]) {
+		cbx(vec);
+		for(vec[1] = 0; vec[1] < size; ++vec[1]) {
+			cby(vec);
+			for(vec[2] = 0; vec[2] < size; ++vec[2]) {
+				cbz(vec);
 			}
 		}
 	}
