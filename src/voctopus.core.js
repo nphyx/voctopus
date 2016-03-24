@@ -156,7 +156,6 @@ Voctopus.prototype.traverse = function(v, init = false) {
 		else nextOctet = 0;
 		if(init && !nextOctet) {
 			nextOctet = getEmpty();
-			bLength = this.buffer.byteLength;
 			pSet(cursor, nextOctet);
 		}
 		if(nextOctet) cursor = nextOctet+octantIdentity(v, depth - ++d)*octantSize;
@@ -175,31 +174,31 @@ Voctopus.prototype.traverse = function(v, init = false) {
  */
 Voctopus.prototype.walk = function(v, init = false) {
 	// we can skip the first octant since its children are at a known address
-	var d = 1, cursor = this.octantSize, bLength = this.buffer.byteLength;
+	var d = 1, nextOctet = 0, cursor = this.octantSize, bLength = this.buffer.byteLength; 
 		// object property lookups can be really slow so predefine things here
 	var 
 		depth = this.depth,
 		pGet = this.get.p, 
-		pSet = this.set.p, 
+		pSet = this.set.p,
 		octantSize = this.octantSize, 
-		getEmpty = this.getEmptyOctet.bind(this), 
+		getEmpty = this.getEmptyOctet.bind(this),
 		stack = new Uint32Array(this.depth);
-	stack[0] = cursor;
+		stack[0] = cursor;
+
 	// walk the tree til we reach the end of a branch
 	do {
 		if(cursor+octantSize < bLength) {
-			stack[d] = pGet(cursor);
+			nextOctet = pGet(cursor);
 		}
-		else stack[d] = 0;
-		if(init && stack[d] === 0) {
-			stack[d] = getEmpty();
-			bLength = this.buffer.byteLength;
-			pSet(cursor, stack[d]);
+		else nextOctet = 0;
+		if(init && !nextOctet) {
+			nextOctet = getEmpty();
+			pSet(cursor, nextOctet);
 		}
-		if(stack[d] !== 0) cursor = stack[d]+octantIdentity(v, depth - d+1)*octantSize;
-		d++;
+		if(nextOctet) cursor = nextOctet+octantIdentity(v, depth - ++d)*octantSize;
+		stack[d-1] = cursor;
 	}
-	while(d < depth);
+	while(nextOctet !== 0 && d < depth);
 	return stack;
 }
 
