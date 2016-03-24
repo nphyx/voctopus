@@ -3,7 +3,7 @@ const Voctopus = require("./voctopus.core.js").Voctopus;
 const VoctopusSchemas = require("./voctopus.schemas.js");
 const loop3D = require("./voctopus.util.js").loop3D;
 // use a lot of globals because it has less impact on run time
-const testList = ["object", "direct"];
+const testList = ["object", "direct", "octet"];
 
 const readObj = (voc, pos) => voc.getVoxel(pos);
 /* Setup */
@@ -14,12 +14,12 @@ const schemaList = [
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
 		},
 		direct:{
-			read:(voc, pos, i) => {
+			read:(voc, pos) => {
 				let ptr = voc.traverse(pos, true);
-				voc.get.r(ptr, i);
-				voc.get.g(ptr, i+1);
-				voc.get.b(ptr, i+2);
-				voc.get.m(ptr, i+3);
+				voc.get.r(ptr);
+				voc.get.g(ptr);
+				voc.get.b(ptr);
+				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
 				let ptr = voc.traverse(pos, true);
@@ -28,21 +28,51 @@ const schemaList = [
 				voc.set.b(ptr, i+2);
 				voc.set.m(ptr, i+3);
 			}
+		},
+		octet:{
+			read: (voc, pos) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				for(var n = 0; n < 8; n++) {
+					voc.get(ptr+voc.octantSize*n);
+				}
+			},
+			write:(voc, pos, i) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let data = new Array(8).fill("").map((el, x) => {x+=i; return {r:posb[0]+x,g:posb[1]+x,b:posb[2]+x,m:i+x}});
+				voc.set.octet(ptr, data);
+			}
 		}
-	}}, 
+	}},
 	{name:"I8M24P", dmin:4, dmax:8, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {m:i})
 		},
 		direct:{
-			read:(voc, pos, i) => {
+			read:(voc, pos) => {
 				let ptr = voc.traverse(pos, true);
-				voc.get.m(ptr, i);
+				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
 				let ptr = voc.traverse(pos, true);
 				voc.set.m(ptr, i);
+			}
+		},
+		octet:{
+			read: (voc, pos) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				for(var n = 0; n < 8; n++) {
+					voc.get(ptr+voc.octantSize*n);
+				}
+			},
+			write:(voc, pos, i) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let data = new Array(8).fill("").map((el, x) => {x+=i; return {m:i+x}});
+				voc.set.octet(ptr, data);
 			}
 		}
 	}},
@@ -52,13 +82,28 @@ const schemaList = [
 			write:(voc, pos, i) => voc.setVoxel(pos, {m:i})
 		},
 		direct:{
-			read:(voc, pos, i) => {
+			read:(voc, pos) => {
 				let ptr = voc.traverse(pos, true);
-				voc.get.m(ptr, i);
+				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
 				let ptr = voc.traverse(pos, true);
 				voc.set.m(ptr, i);
+			}
+		},
+		octet:{
+			read: (voc, pos) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				for(var n = 0; n < 8; n++) {
+					voc.get(ptr+voc.octantSize*n);
+				}
+			},
+			write:(voc, pos, i) => {
+				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
+				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let data = new Array(8).fill("").map((el, x) => {x+=i; return {m:i+x}});
+				voc.set.octet(ptr, data);
 			}
 		}
 	}}
@@ -115,7 +160,7 @@ let stopwatch = (cb) => {
 // calculate octets in voctopus
 let calcOctets = (voc) => {
 	let usedBytes = voc.buffer.byteLength-(voc.buffer.byteLength-voc.nextOctet)-voc.octantSize;
-	return usedBytes / voc.octetSize;
+	return usedBytes / voc.octetSize - 1;
 }
 
 // bytes as mb
@@ -146,11 +191,19 @@ function cbInit(schema, d) {
 }
 
 function cbExpand(schema, d) {
+	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
 	return stopwatch(() => {
-		let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
 		let res = 1;
 		while(res) res = voc.expand();
 	});
+}
+
+function cbTraverse(schema, d) {
+	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
+	let size = Math.pow(2, d - 1);
+	let start = time();
+	loop3D(size, {z:(pos) => voc.traverse(pos, true)});
+	return elapsed(start);
 }
 
 function testRW(testName, schema, d, expand = true) {
@@ -171,12 +224,16 @@ function testRW(testName, schema, d, expand = true) {
 		while(res) res = voc.expand();
 	}
 	let size = Math.pow(2, d - 1);
+	// fudge for octet test
+	if(testName == "octet") size /= 2;
 	start = time();
 	loop3D(size, {y:fy, z:cbw});
 	wtime = elapsed(start);
 	start = time();
 	loop3D(size, {y:fy, z:cbr});
 	rtime = elapsed(start);
+	// fudge for octet test
+	if(testName == "octet") count *= 8;
 	return [d, rtime, wtime, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"];
 }
 
@@ -193,6 +250,7 @@ function benchmark(schema) {
 	rows.push(divider(cellw, new Array(dmax-dmin+2).fill("r")));
 	rows.push(["Init"].concat(iterd(dmin, dmax, cbInit.bind(null, schema))));
 	rows.push(["Expand"].concat(iterd(dmin, dmax, cbExpand.bind(null, schema))));
+	rows.push(["Traverse"].concat(iterd(dmin, dmax, cbTraverse.bind(null, schema))));
 	console.log(table(cellw, rows));
 
 	// Read/Write Benchmarks 
@@ -230,8 +288,9 @@ description of each test suite follows.
 
 Init Tests
 ----------
-These tests cover the time it takes to initialize a new Voctopus, and how long
-it takes to expand it to full size.
+These tests cover the time it takes to initialize a new Voctopus, how long
+it takes to expand it to full size, and the total time to traverse the octree
+to each voxel.
 
 R/W Tests
 ---------
@@ -239,7 +298,8 @@ These tests measure how long reads and writes take using different interfaces. T
 octree is expanded to full size so that expansions won't interrupt r/w.
 
 * *Object*: how long it takes to read/write using the getVoxel and setVoxel methods
-* *Direct*: time to write using the direct getter/setter methods (Voc.set[field])
+* *Direct*: time to read/write using the direct getter/setter methods (Voc.set[field])
+* *Octet*: time to read/write using the octet batch write (Voc.set[field])
 
 Memory Tests
 ------------
