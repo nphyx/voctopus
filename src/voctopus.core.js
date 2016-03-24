@@ -17,6 +17,37 @@ const MAX_BUFFER = 1024*1024*1024*512;
  */
 
 /**
+ * Sets the data for each element in an octet. Pointers are managed automatically.
+ * This can be a big performance boost when you have multiple voxels to write to the
+ * same octet, since it avoids redundant traversal.
+ * @example
+ * ```javascript
+ * let voc = new Voctopus(6);
+ * let data = array[
+ * 	 {}, // members may be empty, but must be present so the indexes are correct
+ * 	 {r:210,g:12,b:14,m:2}, // can use all properties
+ * 	 {r:7},   // or
+ * 	 {g:82},  // any
+ * 	 {b:36},  // combination
+ * 	 {r:255}, // thereof
+ * 	 {},
+ * 	 {}
+ * ];
+ * // in this example, traverse to the second-lowest depth to find the pointer
+ * let index = voc.traverse([0,0,1], voc.depth-1, true).p;
+ * voc.set.octet(index, data); // and done!
+ * ```
+ * @param {int} index
+ * @param {array} data 8-element array of objects containing voxel properties
+ * @return {undefined}
+ */
+function setOctet(voc, index, data) {
+	for(var i = 0; i < 8; ++i) {
+		voc.set(index+i*voc.octantSize, data[i]);	
+	}
+}
+
+/**
  * @private
  * Defines accessors for a voctopus object. Called during initialization and any time
  * the buffer is updated.
@@ -29,6 +60,7 @@ function defineAccessors(voc) {
 		voc.get[label] = getterFactory(length, offset, voc.view);
 		voc.set[label] = setterFactory(length, offset, voc.view);
 	}
+	voc.set.octet = setOctet.bind(null, voc);
 }
 
 function Voctopus(depth, schema = schemas.RGBM) {
@@ -101,14 +133,18 @@ function Voctopus(depth, schema = schemas.RGBM) {
  * Traverses the octree from the root to the supplied position vector, returning
  * the buffer index of the leaf octant. Optionally initializes new octets when
  * init = true.
+ * @param {vector} v coordinate vector of the target voxel
+ * @param {bool} init if true, initializes new octants as it walks (default false)
+ * @return {int} index
  */
 Voctopus.prototype.traverse = function(v, init = false) {
 	// we can skip the first octant since its children are at a known address
 	var d = 1, nextOctet = 0, cursor = this.octantSize, bLength = this.buffer.byteLength; 
 		// object property lookups can be really slow so predefine things here
-	var pGet = this.get.p, 
-		pSet = this.set.p,
+	var 
 		depth = this.depth,
+		pGet = this.get.p, 
+		pSet = this.set.p,
 		octantSize = this.octantSize, 
 		getEmpty = this.getEmptyOctet.bind(this);
 
@@ -142,9 +178,9 @@ Voctopus.prototype.walk = function(v, init = false) {
 	var d = 1, cursor = this.octantSize, bLength = this.buffer.byteLength;
 		// object property lookups can be really slow so predefine things here
 	var 
+		depth = this.depth,
 		pGet = this.get.p, 
 		pSet = this.set.p, 
-		depth = this.depth,
 		octantSize = this.octantSize, 
 		getEmpty = this.getEmptyOctet.bind(this), 
 		stack = new Uint32Array(this.depth);
@@ -197,6 +233,8 @@ Voctopus.prototype.set = function(index, props) {
 	}
 }
 
+
+
 /**
  * Gets the properties of an octant at a given coordinate vector.
  * @param {vector} v [x,y,z] position
@@ -215,8 +253,9 @@ Voctopus.prototype.getVoxel = function(v) {
  * @return {undefined}
  */
 Voctopus.prototype.setVoxel = function(v, props) {
-	return this.set(this.traverse(v, true), props);
+	return this.set(this.traverse(v, this.depth, true), props);
 }
+
 
 /**
  * Returns the next available unused octet position, calling Voctopus#allocateOctet
@@ -285,6 +324,7 @@ Voctopus.prototype.initializeOctet = function(o) {
 		v.setUint8(i, 0); 
 	}
 }
+
 
 /**
  * Support commonjs modules for Nodejs/backend

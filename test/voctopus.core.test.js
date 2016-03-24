@@ -20,6 +20,9 @@ describe("Voctopus", function() {
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
 		voc.should.have.property("maxSize");
+		voc.should.have.property("fields").eql(["m"]);
+		(typeof(voc.get)).should.equal("function", "method get implemented");
+		(typeof(voc.set)).should.equal("function", "method set implemented");
 		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel implemented");
 		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel implemented");
 		(typeof(voc.allocateOctet)).should.equal("function", "method allocateOctet implemented");
@@ -82,9 +85,9 @@ describe("Voctopus", function() {
 		}
 	});
 	it("should traverse the octree using traverse, optionally initializing octets as it goes", function() {
-		voc.traverse([0,0,0]).should.equal(5);
-		voc.traverse([0,0,0], true).should.equal(165);
-		voc.traverse([0,0,0]).should.equal(165);
+		let vec = Float32Array.of([0,0,0]);
+		voc.traverse(vec).should.equal(5);
+		voc.traverse(vec, true).should.equal(165);
 	});
 	it("should walk the octree using walk, returning an array of pointers", function() {
 		voc.walk([0,0,0]).should.eql(new Uint32Array([5,0,0,0,0]));
@@ -121,6 +124,17 @@ describe("Voctopus", function() {
 		let end = Math.pow(size+1, 3)*voc.octantSize;
 		for(i = 0; i < end; i++) {
 			da.getUint8(i).should.eql(db.getUint8(i));
+		}
+	});
+	it("should write a full octet in one pass with set.octet", function() {
+		var dv = voc.view;
+		let index = voc.walk([0,0,0], true)[voc.depth-1].p;
+		let data = [{m:0},{m:1},{m:2},{m:3},{m:4},{m:5},{m:6},{m:7}];
+		index = voc.traverse([0,0,0]);
+		voc.set.octet(index, data);
+		for(let i = 0; i < 8; ++i) {
+			let index2 = index+voc.octantSize*i;
+			dv.getUint8(index2).should.eql(i);
 		}
 	});
 	it("should initialize an octet's data to zero using initializeOctet", function() {
