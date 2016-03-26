@@ -8,7 +8,7 @@ const testList = ["object", "direct", "octet"];
 const readObj = (voc, pos) => voc.getVoxel(pos);
 /* Setup */
 const schemaList = [
-	{name:"RGBM", dmin:4, dmax:7, tests:{
+	{name:"RGBM", dmin:4, dmax:8, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
@@ -115,10 +115,6 @@ let fmt = (cellw, cells) => {
 				 .join("|")+"|";
 }
 
-// make table border
-//let border = (cellw, cells) => "+"+(("-").repeat(cellw+2)+"+").repeat(cells);
-//
-
 // make table dividers
 let divider = (cellw, cells) => cells.map((cell) => {
 	switch(cell) {
@@ -159,8 +155,8 @@ let stopwatch = (cb) => {
 
 // calculate octets in voctopus
 let calcOctets = (voc) => {
-	let usedBytes = voc.buffer.byteLength-(voc.buffer.byteLength-voc.nextOctet)-voc.octantSize;
-	return usedBytes / voc.octetSize - 1;
+	let usedBytes = voc.buffer.byteLength-(voc.buffer.byteLength-voc.nextOctet);
+	return usedBytes / voc.octetSize;
 }
 
 // bytes as mb
@@ -297,9 +293,11 @@ description of each test suite follows.
 
 Init Tests
 ----------
-These tests cover the time it takes to instantiate a new Voctopus, how long
-it takes to expand it to full size, the time to initialize each voxel in the tree,
-and the time to walk to each voxel in the tree.
+These benchmarks cover certain maintenance operations:
+* Create: the time it takes to instantiate a new Voctopus
+* Expand: how long it takes to expand a buffer to maximum size 
+* Init: the total time to initialize every voxel in the octree to full depth
+* Walk: the total time to walk to each voxel in the tree
 
 R/W Tests
 ---------
@@ -313,12 +311,12 @@ octree is expanded to full size so that expansions won't interrupt r/w.
 Memory Tests
 ------------
 These tests measure r/w speeds without expansion, and how much memory is consumed
-by Voctopus' on-demand expansion. The direct-write interfaces are used here.
+by Voctopus' on-demand buffer expansion. The direct-write interfaces are used here.
 
 `);
-benchmark(schemaList[0]);
-/* Begin Benchmarks *
+//benchmark(schemaList[0]);
+/* Begin Benchmarks */
 for(let i in schemaList) {
 	let schema = schemaList[i];
 	benchmark(schema);
-}*/
+}
