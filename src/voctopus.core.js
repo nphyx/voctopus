@@ -66,7 +66,7 @@ function defineAccessors(voc) {
 
 function Voctopus(depth, schema = schemas.RGBM) {
 	if(!depth) throw new Error("Voctopus#constructor must be given a depth");
-	var buffer, view, octantSize, octetSize, firstOffset, nextOctet, startSize, maxSize, dimensions;
+	var buffer, view, octantSize, octetSize, firstOffset, nextOctet, startSize, maxSize, dimensions, walkStack;
 
 	/**
 	 * calculate the size of a single octant based on the sum of lengths of properties 
@@ -76,6 +76,7 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	octetSize = octantSize * 8;
 	maxSize = npot(fullOctreeSize(octantSize, depth));
 	dimensions = Math.pow(2, depth);
+	walkStack = [];
 
 	// define public properties now
 	Object.defineProperties(this, {
@@ -90,11 +91,8 @@ function Voctopus(depth, schema = schemas.RGBM) {
 		"view":{get: () => view, set: (x) => view = x},
 		"maxSize":{get: () => maxSize},
 		"dimensions":{get: () => dimensions},
+		"walkStack":{get: ()=> walkStack, set:(x) => walkStack = x}
 	});
-
-	// we'll initialize the first octet below, so start at the next one
-	nextOctet = octantSize; //octetSize+octantSize; 
-	firstOffset = nextOctet;
 
 
 	/**
@@ -118,10 +116,16 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	// initialize the DataView
 	this.view = new DataView(this.buffer);
 
+	// we'll initialize the first octet below, so start at the next one
+	firstOffset = octetSize;
+	nextOctet = firstOffset+octetSize;
+
 	defineAccessors(this);
 
 	// initialize the root node
-	//this.set.p(0, this.octantSize);
+	this.set.p(0, this.octetSize);
+
+	// set up the voxel class - this will help js engines optimize 
 	this.voxel = {};
 	this.fields = [];
 	for(let i = 0, l = this.schema.length; i < l; ++i) {
@@ -143,27 +147,22 @@ function Voctopus(depth, schema = schemas.RGBM) {
  * @param {int} startPointer start pointer (defaults to start of root octet)
  * @return {ArrayBuffer} indexes of octant at each branch
  */
-Voctopus.prototype.walk = function(v, depth = this.depth, cursor = 0) {
+Voctopus.prototype.walk = function(v, depth = this.depth, cursor = this.firstOffset) {
 	// object property lookups can be really slow so predefine things here
 	var 
 	  i = 0, 
 		md = this.depth,
-		bLength = this.buffer.byteLength,
 		pGet = this.get.p, 
 		octantSize = this.octantSize, 
-		stack = new Uint32Array(depth+1);
-		stack[0] = cursor;
+		stack = [];
 
 	// walk the tree til we reach the end of a branch
-	do {
-		++i;
-		// don't read past the end of the buffer
-		if(cursor+octantSize >= bLength) break;
+	for(i = 0; i < depth; i++) {
+		cursor += octantIdentity(v, md - (i+1))*octantSize;
+		stack.push(cursor);
 		cursor = pGet(cursor);
-		cursor += octantIdentity(v, md - i)*octantSize;
-		stack[i] = cursor;
+		if(cursor === 0) break;
 	}
-	while(cursor !== 0 && i <= depth);
 	return stack;
 }
 
@@ -176,12 +175,12 @@ Voctopus.prototype.walk = function(v, depth = this.depth, cursor = 0) {
  * @return {int} index
  */
 Voctopus.prototype.init = function(v, depth = this.depth) {
-	let p = 0, i = 1, next = 0;
-	let stack = this.walk(v, depth, 0);
-	while(stack[i] !== 0 && i < stack.length) ++i;
-	p = stack[i-1]
-	if(i <= depth) {
-		let pointers = this.allocateOctets(depth - (i-1));
+	let p = 0, next = 0;
+	let stack = this.walk(v, depth);
+	let len = stack.length;
+	p = stack[len-1];
+	if(len < depth) {
+		let pointers = this.allocateOctets(depth - len);
 		let setP = this.set.p.bind(this);
 		for(let n = 0, len = pointers.length; n < len; ++n) {
 			next = pointers[n];
@@ -199,7 +198,7 @@ Voctopus.prototype.init = function(v, depth = this.depth) {
  * @return {undefined}
  */
 Voctopus.prototype.get = function(index) {
-	var voxel = {}; //Object.create(this.voxel);
+	var voxel = Object.create(this.voxel);
 	for(let i = 0, l = this.fields.length; i < l; i++) {
 		let label = this.fields[i];
 		voxel[label] = this.get[label](index);
@@ -237,7 +236,7 @@ Voctopus.prototype.set = function(index, props) {
 Voctopus.prototype.getVoxel = function(v) {
 	// note we set this up to skip the root node since its index is predictable
 	let stack = this.walk(v);
-	let val = this.get(stack[this.depth]);
+	let val = this.get(stack[this.depth-1]);
 	return val;
 }
 

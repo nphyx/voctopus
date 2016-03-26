@@ -1,7 +1,7 @@
 "use strict";
 require("should");
 const Voctopus = require("../src/voctopus.core").Voctopus;
-const {loop3D, npot, sump8, octantIdentity} = require("../src/voctopus.util.js");
+const {loop3D, npot, sump8} = require("../src/voctopus.util.js");
 
 describe("Voctopus", function() {
 	var d, voc;
@@ -34,7 +34,7 @@ describe("Voctopus", function() {
 		(voc.schema).should.eql(schema);
 		voc.octantSize.should.equal(5);
 		voc.octetSize.should.equal(40);
-		voc.nextOctet.should.equal(5);
+		voc.nextOctet.should.equal(80);
 	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
 		var voxSize = voc.octantSize;
@@ -51,7 +51,7 @@ describe("Voctopus", function() {
 	});
 	it("should initialize the root pointer to the correct offset", function() {
 		var dv = voc.view;
-		dv.getUint32(1).should.eql(0, "root octant's pointer is pointing at the right offset");
+		dv.getUint32(1).should.eql(40, "root octant's pointer is pointing at the right offset");
 	});
 	it("should correctly implement pointer getters and setters", function() {
 		// implemented?
@@ -60,10 +60,10 @@ describe("Voctopus", function() {
 		voc.set.m.should.be.type("function");
 		voc.set.p.should.be.type("function");
 
-		voc.set.p(0, 5);
-		voc.get.p(0).should.eql(5);
-		voc.set.p(5, 45);
-		voc.get.p(5).should.eql(45);
+		voc.set.p(0, 40);
+		voc.get.p(0).should.eql(40);
+		voc.set.p(40, 80);
+		voc.get.p(40).should.eql(80);
 	});
 	it("should generate a buffer of the correct length", function() {
 		// should make a buffer of max size if the max size is less than 73*octantSize
@@ -91,61 +91,64 @@ describe("Voctopus", function() {
 			voc.expand().should.be.false();
 		}
 	});
-	it("should walk the octree using walk, returning an array of pointers", function() {
-		voc.walk([0,0,0]).should.eql(new Uint32Array([0,0,0,0,0,0]));
-		let rawArray = [0, 5, 45, 85, 125, 165];
-		let expected = new Uint32Array(rawArray);
+	it("should walk the octree, returning an array of pointers", function() {
+		let vec = Uint32Array.of(0,0,0);
+		voc.walk(vec).should.eql([40]);
+		let expected = [40, 80, 120, 160, 200];
 
 		// init is not yet tested so we need to manually set pointers where they belong
-		for(let i = 1; i < expected.length; ++i) {
-			voc.view.setUint32(expected[i-1]+1, expected[i]);
+		for(let i = 0; i < expected.length-1; ++i) {
+			voc.view.setUint32(expected[i]+schema[1].offset, expected[i+1]);
 		}
 		// now it should have all the pointers in the right places
-		voc.walk([0,0,0]).should.eql(expected);
+		voc.walk(vec).should.eql(expected);
 
 		// forward walk
-		for(let i = 1; i <= voc.depth; ++i) {
-			let tempArray = rawArray.slice(0, i+1);
-			let tempTyped = new Uint32Array(tempArray.length);
-			tempTyped.set(tempArray);
-			voc.walk([0,0,0], i).should.eql(tempTyped);
+		for(let i = 0; i < voc.depth; ++i) {
+			let tempArray = expected.slice(0, i+1);
+			voc.walk(vec, i+1).should.eql(tempArray);
 		}
 
 		// reverse walk
-		let tempArray = rawArray.slice(0);
-		for(let i = 0; i <= voc.depth; ++i) {
-			let tempTyped = new Uint32Array(tempArray.length)
-			tempTyped.set(tempArray);
-			voc.walk([0,0,0], voc.depth-i, expected[i]).should.eql(tempTyped);
+		let tempArray = expected.slice(0);
+		for(let i = 0; i < voc.depth; ++i) {
+			voc.walk(voc, voc.depth-i, expected[i]).should.eql(tempArray);
 			tempArray.shift();
 		}
-		voc.view.setUint32(125+voc.octantSize+schema[1].offset, 205);
-		expected[5] = 170;
-		voc.walk([1,0,0]).should.eql(expected);
-		voc.view.setUint32(125+voc.octantSize+schema[1].offset, 205);
-		expected[4] = 130;
-		expected[5] = 205;
-		voc.walk([2,0,0]).should.eql(expected);
+		//voc.view.setUint32(160+voc.octantSize+schema[1].offset, 200);
+		expected[4] = 205;
+		vec[0] = 1.0;
+		voc.walk(vec).should.eql(expected);
+		voc.view.setUint32(160+voc.octantSize+schema[1].offset, 240);
+		expected[3] = 165;
+		expected[4] = 240;
+		vec[0] = 2;
+		voc.walk(vec).should.eql(expected);
 	});
 	it("should initialize a coordinate's branch to a given depth with init", function() {
 		let vec = Float32Array.of(0,0,0);
-		let expected = [0, 5, 45, 85, 125, 165];
+		let expected = [40, 80, 120, 160, 200];
 		// one at a time
-		for(let i = 1; i < expected.length; ++i) {
-			voc.init(vec, i).should.eql(expected[i], "at "+i+" expected "+expected[i]);
+		for(let i = 0; i < expected.length; ++i) {
+			voc.init(vec, i+1).should.eql(expected[i]);
 		}
 		// now all at once
 		voc = new Voctopus(d, schema);
 		voc.init(vec);
-		voc.walk(vec).should.eql(new Uint32Array(expected));
+		voc.walk(vec).should.eql(expected);
 		vec[0] = 1.0;
-		voc.init(vec).should.eql(170);
-		vec[0] = 2.0;
 		voc.init(vec).should.eql(205);
-		voc.walk(vec).should.eql(new Uint32Array([0,5,45,85,130,205]));
+		vec[0] = 2.0;
+		voc.init(vec).should.eql(240);
+		expected[3] = 165;
+		expected[4] = 240;
+		voc.walk(vec).should.eql(expected);
 		vec[0] = 4.0;
-		voc.init(vec).should.eql(285);
-		voc.walk(vec).should.eql(new Uint32Array([0,5,45,90,245,285]));
+		voc.init(vec).should.eql(320);
+		expected[2] = 125;
+		expected[3] = 280;
+		expected[4] = 320;
+		voc.walk(vec).should.eql(expected);
 
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
@@ -153,22 +156,23 @@ describe("Voctopus", function() {
 		// this should make a tree going down to 0,0
 		voc.setVoxel([0,0,0], {m:16});
 		// look at the raw data, since we haven't yet tested getVoxel
-		dv.getUint32(6).should.eql(45, "octant's pointer at depth 1 is pointing at the right offset");
-		dv.getUint32(46).should.eql(85, "octant's pointer at depth 2 is pointing at the right offset");
-		dv.getUint32(86).should.eql(125, "octant's pointer at depth 3 is pointing at the right offset");
-		dv.getUint32(126).should.eql(165, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint8(165).should.eql(16, "voxel's material value is correct");
-		dv.getUint32(166).should.eql(0, "voxel's pointer value is correct");
+		dv.getUint32(1).should.eql(40, "octant's pointer at depth 1 is pointing at the right offset");
+		dv.getUint32(41).should.eql(80, "octant's pointer at depth 2 is pointing at the right offset");
+		dv.getUint32(81).should.eql(120, "octant's pointer at depth 3 is pointing at the right offset");
+		dv.getUint32(121).should.eql(160, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint32(161).should.eql(200, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint32(201).should.eql(0, "voxel's pointer value is correct");
+		dv.getUint8(200).should.eql(16, "voxel's material value is correct");
 
 		voc.setVoxel([1,0,0], {m:12});
-		dv.getUint8(170).should.eql(12, "voxel's material value is correct");
+		dv.getUint8(205).should.eql(12, "voxel's material value is correct");
 	});
 	it("should get and set voxels", function() {
 		this.timeout(3000);
 		voc = new Voctopus(3, schema);
 		var i, fy = () => i = 0;
 		loop3D(voc.dimensions, {
-			y:fy, z:(pos) => { 
+			y:fy, z:(pos) => {
 				voc.setVoxel(pos, {m:i});
 				voc.getVoxel(pos).should.eql({m:i}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+i);
 				i++;
@@ -198,10 +202,10 @@ describe("Voctopus", function() {
 	});
 	it("should write a full octet in one pass with set.octet", function() {
 		var dv = voc.view;
-		voc.init([0,0,0]);
-		let index = voc.walk([0,0,0])[voc.depth-1].p;
+		var vec = Uint32Array.of(0,0,0);
+		voc.init(vec);
+		let index = voc.walk(vec)[voc.depth-1];
 		let data = [{m:0},{m:1},{m:2},{m:3},{m:4},{m:5},{m:6},{m:7}];
-		index = voc.walk([0,0,0])[voc.depth];
 		voc.set.octet(index, data);
 		for(let i = 0; i < 8; ++i) {
 			let index2 = index+voc.octantSize*i;
