@@ -39,7 +39,7 @@ const schemaList = [
 			},
 			write:(voc, pos, i) => {
 				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
-				let ptr = voc.walk(posb)[voc.depth];
+				let ptr = voc.init(posb);
 				let data = new Array(8).fill("").map((el, x) => {x+=i; return {r:posb[0]+x,g:posb[1]+x,b:posb[2]+x,m:i+x}});
 				voc.set.octet(ptr, data);
 			}
@@ -70,7 +70,7 @@ const schemaList = [
 			},
 			write:(voc, pos, i) => {
 				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
-				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let ptr = voc.init(posb);
 				let data = new Array(8).fill("").map((el, x) => {x+=i; return {m:i+x}});
 				voc.set.octet(ptr, data);
 			}
@@ -101,7 +101,7 @@ const schemaList = [
 			},
 			write:(voc, pos, i) => {
 				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
-				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let ptr = voc.init(posb);
 				let data = new Array(8).fill("").map((el, x) => {x+=i; return {m:i+x}});
 				voc.set.octet(ptr, data);
 			}
@@ -156,7 +156,7 @@ let stopwatch = (cb) => {
 // calculate octets in voctopus
 let calcOctets = (voc) => {
 	let usedBytes = voc.buffer.byteLength-(voc.buffer.byteLength-voc.nextOctet);
-	return usedBytes / voc.octetSize;
+	return usedBytes / voc.octetSize - 1;
 }
 
 // bytes as mb
