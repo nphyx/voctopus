@@ -12,7 +12,7 @@ function checkProps(schema) {
 	}
 }
 
-describe("RGM Schema", function() {
+describe("RGBM Schema", function() {
 	var voc, schema = schemas.RGBM;
 	it("should have the expected fields", function() {
 		checkProps(schema);
@@ -22,19 +22,22 @@ describe("RGM Schema", function() {
 		schema[3].label.should.eql("m");
 		schema[4].label.should.eql("p");
 	});
+	it("should have the correct octant and octet size", function() {
+		new Voctopus(1, schema).octantSize.should.eql(8);
+		new Voctopus(1, schema).octetSize.should.eql(64);
+	});
 	it("should get and set voxels", function() {
 		this.timeout(3000);
-		var size, i, index, count = 0, fy = () => i = 0;
+		var i, index, count = 0, fy = () => i = 0;
 		voc = new Voctopus(5, schema);
-		size = Math.pow(2, voc.depth - 1);
-		loop3D(size, {
+		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				index = voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3});
 				i++;
 				count++; 
 			}
 		});
-		loop3D(size, {
+		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				voc.getVoxel(pos).should.eql({r:i, g:i+1, b:i+2, m:i+3});
 				i++;
@@ -49,19 +52,22 @@ describe("I8M24P Schema", function() {
 		schema[0].label.should.eql("m");
 		schema[1].label.should.eql("p");
 	});
+	it("should have the correct octant and octet size", function() {
+		new Voctopus(1, schema).octantSize.should.eql(4);
+		new Voctopus(1, schema).octetSize.should.eql(32);
+	});
 	it("should get and set voxels", function() {
 		this.timeout(10000);
-		var size, i, index, count = 0, fy = () => i = 0;
+		var i, index, count = 0, fy = () => i = 0;
 		voc = new Voctopus(5, schema);
-		size = Math.pow(2, voc.depth - 1);
-		loop3D(size, {
+		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				index = voc.setVoxel(pos, {m:i});
 				i++;
 				count++; 
 			}
 		});
-		loop3D(size, {
+		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				voc.getVoxel(pos).m.should.eql(i);
 				i++;

@@ -8,21 +8,21 @@ const testList = ["object", "direct", "octet"];
 const readObj = (voc, pos) => voc.getVoxel(pos);
 /* Setup */
 const schemaList = [
-	{name:"RGBM", dmin:4, dmax:8, tests:{
+	{name:"RGBM", dmin:4, dmax:7, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
 		},
 		direct:{
 			read:(voc, pos) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.walk(pos)[voc.depth];
 				voc.get.r(ptr);
 				voc.get.g(ptr);
 				voc.get.b(ptr);
 				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.init(pos);
 				voc.set.r(ptr, i);
 				voc.set.g(ptr, i+1);
 				voc.set.b(ptr, i+2);
@@ -32,14 +32,14 @@ const schemaList = [
 		octet:{
 			read: (voc, pos) => {
 				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
-				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let ptr = voc.walk(posb)[voc.depth];
 				for(var n = 0; n < 8; n++) {
 					voc.get(ptr+voc.octantSize*n);
 				}
 			},
 			write:(voc, pos, i) => {
 				let posb = Float32Array.of(pos[0]*2, pos[1]*2, pos[2]*2);
-				let ptr = voc.walk(posb, true)[voc.depth-1];
+				let ptr = voc.walk(posb)[voc.depth];
 				let data = new Array(8).fill("").map((el, x) => {x+=i; return {r:posb[0]+x,g:posb[1]+x,b:posb[2]+x,m:i+x}});
 				voc.set.octet(ptr, data);
 			}
@@ -52,11 +52,11 @@ const schemaList = [
 		},
 		direct:{
 			read:(voc, pos) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.init(pos);
 				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.init(pos);
 				voc.set.m(ptr, i);
 			}
 		},
@@ -83,11 +83,11 @@ const schemaList = [
 		},
 		direct:{
 			read:(voc, pos) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.init(pos);
 				voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
-				let ptr = voc.traverse(pos, true);
+				let ptr = voc.init(pos);
 				voc.set.m(ptr, i);
 			}
 		},
@@ -186,7 +186,7 @@ let iterd = (dmin, dmax, cb) => {
 	return results;
 }
 
-function cbInit(schema, d) {
+function cbInst(schema, d) {
 	return stopwatch(() => new Voctopus(d, VoctopusSchemas[schema.name]));
 }
 
@@ -198,11 +198,19 @@ function cbExpand(schema, d) {
 	});
 }
 
-function cbTraverse(schema, d) {
+function cbInit(schema, d) {
 	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
 	let size = Math.pow(2, d - 1);
 	let start = time();
-	loop3D(size, {z:(pos) => voc.traverse(pos, true)});
+	loop3D(size, {z:(pos) => voc.init(pos)});
+	return elapsed(start);
+}
+
+function cbWalk(schema, d) {
+	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
+	let size = Math.pow(2, d - 1);
+	let start = time();
+	loop3D(size, {z:(pos) => voc.walk(pos, true)});
 	return elapsed(start);
 }
 
@@ -248,9 +256,10 @@ function benchmark(schema) {
 	console.log("\nInitialization Tests\n--------------------");
 	rows.push(["Depth"].concat(range(dmin, dmax)));
 	rows.push(divider(cellw, new Array(dmax-dmin+2).fill("r")));
-	rows.push(["Init"].concat(iterd(dmin, dmax, cbInit.bind(null, schema))));
+	rows.push(["Create"].concat(iterd(dmin, dmax, cbInst.bind(null, schema))));
 	rows.push(["Expand"].concat(iterd(dmin, dmax, cbExpand.bind(null, schema))));
-	rows.push(["Traverse"].concat(iterd(dmin, dmax, cbTraverse.bind(null, schema))));
+	rows.push(["Init"].concat(iterd(dmin, dmax, cbInit.bind(null, schema))));
+	rows.push(["Walk"].concat(iterd(dmin, dmax, cbWalk.bind(null, schema))));
 	console.log(table(cellw, rows));
 
 	// Read/Write Benchmarks 
@@ -288,9 +297,9 @@ description of each test suite follows.
 
 Init Tests
 ----------
-These tests cover the time it takes to initialize a new Voctopus, how long
-it takes to expand it to full size, and the total time to traverse the octree
-to each voxel.
+These tests cover the time it takes to instantiate a new Voctopus, how long
+it takes to expand it to full size, the time to initialize each voxel in the tree,
+and the time to walk to each voxel in the tree.
 
 R/W Tests
 ---------
@@ -307,9 +316,9 @@ These tests measure r/w speeds without expansion, and how much memory is consume
 by Voctopus' on-demand expansion. The direct-write interfaces are used here.
 
 `);
-
-/* Begin Benchmarks */
+benchmark(schemaList[0]);
+/* Begin Benchmarks *
 for(let i in schemaList) {
 	let schema = schemaList[i];
 	benchmark(schema);
-}
+}*/

@@ -33,8 +33,9 @@ const MAX_BUFFER = 1024*1024*1024*512;
  * 	 {},
  * 	 {}
  * ];
- * // in this example, traverse to the second-lowest depth to find the pointer
- * let index = voc.traverse([0,0,1], voc.depth-1, true).p;
+ * // in this example, walk to the second-lowest depth to find the pointer
+ * voc.init([0,0,1]);
+ * let index = voc.walk([0,0,1]).p;
  * voc.set.octet(index, data); // and done!
  * ```
  * @param {int} index
@@ -65,7 +66,7 @@ function defineAccessors(voc) {
 
 function Voctopus(depth, schema = schemas.RGBM) {
 	if(!depth) throw new Error("Voctopus#constructor must be given a depth");
-	var buffer, view, octantSize, octetSize, nextOctet, startSize, maxSize;
+	var buffer, view, octantSize, octetSize, firstOffset, nextOctet, startSize, maxSize, dimensions;
 
 	/**
 	 * calculate the size of a single octant based on the sum of lengths of properties 
@@ -73,7 +74,8 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	 */
 	octantSize = schema.reduce((prev, cur) => prev += cur.length, 0);
 	octetSize = octantSize * 8;
-	maxSize = fullOctreeSize(octantSize, depth);
+	maxSize = npot(fullOctreeSize(octantSize, depth));
+	dimensions = Math.pow(2, depth);
 
 	// define public properties now
 	Object.defineProperties(this, {
@@ -82,14 +84,17 @@ function Voctopus(depth, schema = schemas.RGBM) {
 		"octantSize":{get: () => octantSize},
 		"freedOctets":{value: [], enumerable: false},	
 		"nextOctet":{get: () => nextOctet, set: (v) => nextOctet = v, enumerable: false},
-		"depth":{get: () => depth,},
+		"firstOffset":{get: () => firstOffset},
+		"depth":{get: () => depth},
 		"buffer":{get: () => buffer, set: (x) => buffer = x},
 		"view":{get: () => view, set: (x) => view = x},
 		"maxSize":{get: () => maxSize},
+		"dimensions":{get: () => dimensions},
 	});
 
 	// we'll initialize the first octet below, so start at the next one
-	nextOctet = octetSize+octantSize; 
+	nextOctet = octantSize; //octetSize+octantSize; 
+	firstOffset = nextOctet;
 
 
 	/**
@@ -116,7 +121,7 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	defineAccessors(this);
 
 	// initialize the root node
-	this.set.p(0, this.octantSize);
+	//this.set.p(0, this.octantSize);
 	this.voxel = {};
 	this.fields = [];
 	for(let i = 0, l = this.schema.length; i < l; ++i) {
@@ -130,76 +135,61 @@ function Voctopus(depth, schema = schemas.RGBM) {
 }
 
 /**
- * Traverses the octree from the root to the supplied position vector, returning
- * the buffer index of the leaf octant. Optionally initializes new octets when
- * init = true.
- * @param {vector} v coordinate vector of the target voxel
- * @param {bool} init if true, initializes new octants as it walks (default false)
- * @return {int} index
- */
-Voctopus.prototype.traverse = function(v, init = false) {
-	// we can skip the first octant since its children are at a known address
-	var d = 1, nextOctet = 0, cursor = this.octantSize, bLength = this.buffer.byteLength; 
-		// object property lookups can be really slow so predefine things here
-	var 
-		depth = this.depth,
-		pGet = this.get.p, 
-		pSet = this.set.p,
-		octantSize = this.octantSize, 
-		getEmpty = this.getEmptyOctet.bind(this);
-
-	// walk the tree til we reach the end of a branch
-	do {
-		if(cursor+octantSize < bLength) {
-			nextOctet = pGet(cursor);
-		}
-		else nextOctet = 0;
-		if(init && !nextOctet) {
-			nextOctet = getEmpty();
-			pSet(cursor, nextOctet);
-		}
-		if(nextOctet) cursor = nextOctet+octantIdentity(v, depth - ++d)*octantSize;
-	}
-	while(nextOctet !== 0 && d < depth);
-	return cursor;
-}
-
-/**
  * Walks the octree from the root to the supplied position vector, building an
  * array of indices of each octet as it goes, then returns the array. Optionally
  * initializes octets when init = true.
  * @param {vector} v coordinate vector of the target voxel
- * @param {bool} init if true, initializes new octants as it walks (default false)
+ * @param {int} depth maximum depth to walk to (default this.depth)
+ * @param {int} startPointer start pointer (defaults to start of root octet)
  * @return {ArrayBuffer} indexes of octant at each branch
  */
-Voctopus.prototype.walk = function(v, init = false) {
-	// we can skip the first octant since its children are at a known address
-	var d = 1, nextOctet = 0, cursor = this.octantSize, bLength = this.buffer.byteLength; 
-		// object property lookups can be really slow so predefine things here
+Voctopus.prototype.walk = function(v, depth = this.depth, cursor = 0) {
+	// object property lookups can be really slow so predefine things here
 	var 
-		depth = this.depth,
+	  i = 0, 
+		md = this.depth,
+		bLength = this.buffer.byteLength,
 		pGet = this.get.p, 
-		pSet = this.set.p,
 		octantSize = this.octantSize, 
-		getEmpty = this.getEmptyOctet.bind(this),
-		stack = new Uint32Array(this.depth);
+		stack = new Uint32Array(depth+1);
 		stack[0] = cursor;
 
 	// walk the tree til we reach the end of a branch
 	do {
-		if(cursor+octantSize < bLength) {
-			nextOctet = pGet(cursor);
-		}
-		else nextOctet = 0;
-		if(init && !nextOctet) {
-			nextOctet = getEmpty();
-			pSet(cursor, nextOctet);
-		}
-		if(nextOctet) cursor = nextOctet+octantIdentity(v, depth - ++d)*octantSize;
-		stack[d-1] = cursor;
+		++i;
+		// don't read past the end of the buffer
+		if(cursor+octantSize >= bLength) break;
+		cursor = pGet(cursor);
+		cursor += octantIdentity(v, md - i)*octantSize;
+		stack[i] = cursor;
 	}
-	while(nextOctet !== 0 && d < depth);
+	while(cursor !== 0 && i <= depth);
 	return stack;
+}
+
+/**
+ * Initializes a voxel at the supplied vector and branch depth, walking down the
+ * tree and allocating voxels at each level until it hits the end.
+ * @param {vector} v coordinate vector of the target voxel
+ * @param {int} depth depth to walk to (default this.depth)
+ * @param {bool} init if true, initializes new octants as it walks (default false)
+ * @return {int} index
+ */
+Voctopus.prototype.init = function(v, depth = this.depth) {
+	let p = 0, i = 1, next = 0;
+	let stack = this.walk(v, depth, 0);
+	while(stack[i] !== 0 && i < stack.length) ++i;
+	p = stack[i-1]
+	if(i <= depth) {
+		let pointers = this.allocateOctets(depth - (i-1));
+		let setP = this.set.p.bind(this);
+		for(let n = 0, len = pointers.length; n < len; ++n) {
+			next = pointers[n];
+			setP(p, next);
+			p = next;
+		}
+	}
+	return p;
 }
 
 
@@ -209,7 +199,7 @@ Voctopus.prototype.walk = function(v, init = false) {
  * @return {undefined}
  */
 Voctopus.prototype.get = function(index) {
-	var voxel = Object.create(this.voxel);
+	var voxel = {}; //Object.create(this.voxel);
 	for(let i = 0, l = this.fields.length; i < l; i++) {
 		let label = this.fields[i];
 		voxel[label] = this.get[label](index);
@@ -224,25 +214,31 @@ Voctopus.prototype.get = function(index) {
  * @return {undefined}
  */
 Voctopus.prototype.set = function(index, props) {
+	var keys = Object.keys(props);
+	for(let i = 0, l = keys.length; i < l; ++i) {
+		let label = keys[i];
+		this.set[label](index, props[label]);
+	}
+	/*
 	for(let i = 0, l = this.fields.length; i < l; i++) {
 		let label = this.fields[i];
 		if(typeof(props[label]) !== "undefined") {
 			this.set[label](index, props[label]);
 		}
 	}
+	*/
 }
-
-
 
 /**
  * Gets the properties of an octant at a given coordinate vector.
  * @param {vector} v [x,y,z] position
- * @param {object} props a property object, members corresponding to the schema
  * @return {undefined}
  */
 Voctopus.prototype.getVoxel = function(v) {
 	// note we set this up to skip the root node since its index is predictable
-	return this.get(this.traverse(v));
+	let stack = this.walk(v);
+	let val = this.get(stack[this.depth]);
+	return val;
 }
 
 /**
@@ -252,37 +248,34 @@ Voctopus.prototype.getVoxel = function(v) {
  * @return {undefined}
  */
 Voctopus.prototype.setVoxel = function(v, props) {
-	return this.set(this.traverse(v, this.depth, true), props);
-}
-
-
-/**
- * Returns the next available unused octet position, calling Voctopus#allocateOctet
- * if a previously freed octet is available, which may in turn trigger an expansion
- * via Voctopus#expand (side effect warning).
- */
-Voctopus.prototype.getEmptyOctet = function() {
-	if(this.freedOctets.length > 0) return this.freedOctets.pop();
-	else return this.allocateOctet();
+	let ptr = this.init(v);
+	this.set(ptr, props);
+	return ptr;
 }
 
 /**
- * Allocates an octet, returning its address and incrementing the nextOctet pointer.
- * @return {int} new octet beginning address
+ * Returns the next available unused octet position, calling Voctopus#expand
+ * if it needs to create more space.
+ * @param {int} count number of octets to allocate (default 1)
+ * @return {array} array of new pointers
  */
-Voctopus.prototype.allocateOctet = function() {
-	var next = this.nextOctet, size = this.octetSize;
-	if(next+size > this.buffer.byteLength) this.expand();
-	var ret = next; 
-	this.nextOctet += size;
-	return ret;
+Voctopus.prototype.allocateOctets = function(count = 1) {
+	if(this.freedOctets.length > 0) return this.freedOctets.splice(0, count);
+	let pointers = new Array(count), i = 0; 
+	let next = this.nextOctet, size = this.octetSize;
+	if(next+size*count > this.buffer.byteLength) this.expand();
+	for(; i < count; ++i) {
+		pointers[i] = next+size*i;
+	}
+	this.nextOctet = pointers[count-1]+size;
+	return pointers;
 }
 
 /**
  * Prunes redundant octets (those which are empty or have identical values). Freed
  * octets are added to the freedOctets array.
  * @return {bool} true on success or nothing to be done, false on failure
- */
+ *
 Voctopus.prototype.prune = function() {
 	var d = 0, cursor = this.octantSize, nextOctet = 0, pointer = this.schema.find((el) => el.label === "p");
 	function checkOctet() {
@@ -297,7 +290,7 @@ Voctopus.prototype.prune = function() {
  */
 Voctopus.prototype.expand = function() {
 	var buffer = this.buffer, s, tmp, max;
-	max = Math.min(MAX_BUFFER, npot(this.maxSize));
+	max = Math.min(MAX_BUFFER, this.maxSize);
 	s = buffer.byteLength * 2;
 	if(s > max) return false;
 	tmp = new ArrayBuffer(s);
