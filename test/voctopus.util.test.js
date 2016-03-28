@@ -2,7 +2,7 @@
 require("should");
 const {sump8, fullOctreeSize, maxAddressableOctreeDepth, 
        maxOctreeDensityFactor, coordinateSpace, npot,
-			 octantIdentity
+			 octantIdentity, loop3D
 			} = require("../src/voctopus.util.js");
 
 describe("The extended DataView", function() {
@@ -92,7 +92,16 @@ describe("util functions", function() {
 	});
 	it("should calculate interesting information about an octree", function() {
 	});
-	it("", function() {
+	it("should loop through all the coordinates in a space with loop3D", function() {
+		let x = 0, y = 0, z = 0;
+		loop3D(16, {
+			fx:() => x++,
+			fy:() => y++,
+			fz:(pos) => {
+				z++;
+				pos.should.eql(Uint32Array.of(x,y,z));
+			}
+		});
 	});
 	it("should yield expected octant offsets (range 0-7 * octantSize) for a position vector", function() {
 		var d = 5;
