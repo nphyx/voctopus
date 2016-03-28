@@ -122,7 +122,7 @@ function npot(n) {
  * @return {undefined}
  */
 function loop3D(size, cbs) {
-	var cbx, cby, cbz, v = new Uint32Array(3);
+	var cbx, cby, cbz, v = Uint32Array.of(0,0,0);
 	cbx = typeof(cbs.x) === "function"?cbs.x:function(){};
 	cby = typeof(cbs.y) === "function"?cbs.y:function(){};
 	cbz = typeof(cbs.z) === "function"?cbs.z:function(){};

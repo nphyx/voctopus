@@ -93,11 +93,21 @@ describe("util functions", function() {
 	it("should calculate interesting information about an octree", function() {
 	});
 	it("should loop through all the coordinates in a space with loop3D", function() {
-		let x = 0, y = 0, z = 0;
+		let x = -1, y = -1, z = -1;
 		loop3D(16, {
-			fx:() => x++,
-			fy:() => y++,
-			fz:(pos) => {
+			x:(pos) => {
+				y = 0; z = 0;
+				x++;
+				pos.should.eql(Uint32Array.of(x,y,z));
+				y = -1; z = -1;
+			},
+			y:(pos) => {
+				z = 0;
+				y++;
+				pos.should.eql(Uint32Array.of(x,y,z));
+				z = -1;
+			},
+			z:(pos) => {
 				z++;
 				pos.should.eql(Uint32Array.of(x,y,z));
 			}
