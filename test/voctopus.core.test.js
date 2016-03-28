@@ -91,65 +91,126 @@ describe("Voctopus", function() {
 			voc.expand().should.be.false();
 		}
 	});
-	it("should walk the octree, returning an array of pointers", function() {
-		let vec = Uint32Array.of(0,0,0);
-		voc.walk(vec).should.eql([40]);
-		let expected = [40, 80, 120, 160, 200];
-
-		// init is not yet tested so we need to manually set pointers where they belong
-		for(let i = 0; i < expected.length-1; ++i) {
-			voc.view.setUint32(expected[i]+schema[1].offset, expected[i+1]);
-		}
-		// now it should have all the pointers in the right places
-		voc.walk(vec).should.eql(expected);
-
-		// forward walk
-		for(let i = 0; i < voc.depth; ++i) {
-			let tempArray = expected.slice(0, i+1);
-			voc.walk(vec, i+1).should.eql(tempArray);
-		}
-
-		// reverse walk
-		let tempArray = expected.slice(0);
-		for(let i = 0; i < voc.depth; ++i) {
-			voc.walk(voc, voc.depth-i, expected[i]).should.eql(tempArray);
-			tempArray.shift();
-		}
-		//voc.view.setUint32(160+voc.octantSize+schema[1].offset, 200);
-		expected[4] = 205;
-		vec[0] = 1.0;
-		voc.walk(vec).should.eql(expected);
-		voc.view.setUint32(160+voc.octantSize+schema[1].offset, 240);
-		expected[3] = 165;
-		expected[4] = 240;
-		vec[0] = 2;
-		voc.walk(vec).should.eql(expected);
-	});
 	it("should initialize a coordinate's branch to a given depth with init", function() {
+		// use a smaller tree for these tests because it's less math to reason about
 		let vec = Float32Array.of(0,0,0);
 		let expected = [40, 80, 120, 160, 200];
 		// one at a time
 		for(let i = 0; i < expected.length; ++i) {
-			voc.init(vec, i+1).should.eql(expected[i]);
+			voc.init(vec, i).should.eql(expected[i]);
 		}
 		// now all at once
-		voc = new Voctopus(d, schema);
+		voc = new Voctopus(3, schema);
+		voc.init(vec).should.eql(120);
+
+		vec[0] = 1.0;
+		voc.init(vec).should.eql(125);
+		voc.init(vec).should.eql(125);
+
+		// check each depth level change
+		vec[0] = 2.0;
+		voc.init(vec).should.eql(160);
+		voc.init(vec).should.eql(160);
+
+		vec[0] = 4.0;
+		voc.init(vec).should.eql(240);
+		voc.init(vec).should.eql(240);
+
+		vec[1] = 1.0;
+		voc.init(vec).should.eql(250);
+		voc.init(vec).should.eql(250);
+
+		vec[1] = 2.0;
+		voc.init(vec).should.eql(280);
+		voc.init(vec).should.eql(280);
+
+		vec[1] = 4.0;
+		voc.init(vec).should.eql(360);
+		voc.init(vec).should.eql(360);
+
+		vec[2] = 2.0;
+		voc.init(vec).should.eql(400);
+		voc.init(vec).should.eql(400);
+
+		vec[2] = 4.0;
+		voc.init(vec).should.eql(480);
+		voc.init(vec).should.eql(480);
+
+		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
+		voc.init(vec).should.eql(575);
+		voc.init(vec).should.eql(575);
+
+		voc = new Voctopus(5, schema);
+		loop3D(16, {x:(pos) => {
+			let posb = Array.prototype.slice.call(pos);
+			let vec = [];
+			for(let i in posb) posb[i] *= 2;
+			for(let i = 0; i < 8; ++i) {
+				// this is slow and dumb but it's easy to understand and just a test!
+				let str = (("0").repeat(3)+(i >>> 0).toString(2)).slice(-3);
+				vec[0] = posb[0]+parseInt(str.charAt(2));
+				vec[1] = posb[1]+parseInt(str.charAt(1));
+				vec[2] = posb[2]+parseInt(str.charAt(0));
+				voc.init(vec).should.eql(voc.nextOctet - 40 + voc.octantSize*i);
+			}
+		}});
+	});
+	it("should walk the octree, returning an array of pointers", function() {
+		// use a smaller tree for these tests because it's less math to reason about
+		voc = new Voctopus(3, schema);
+		let vec = Float32Array.of(0,0,0);
+		voc.walk(vec).should.eql([40]);
+		let expected = [40, 80, 120];
+
+		// now all at once
 		voc.init(vec);
 		voc.walk(vec).should.eql(expected);
+
 		vec[0] = 1.0;
-		voc.init(vec).should.eql(205);
-		vec[0] = 2.0;
-		voc.init(vec).should.eql(240);
-		expected[3] = 165;
-		expected[4] = 240;
-		voc.walk(vec).should.eql(expected);
-		vec[0] = 4.0;
-		voc.init(vec).should.eql(320);
-		expected[2] = 125;
-		expected[3] = 280;
-		expected[4] = 320;
+		voc.init(vec);
+		expected = [40, 80, 125];
 		voc.walk(vec).should.eql(expected);
 
+		// check each depth level change
+		vec[0] = 2.0;
+		voc.init(vec);
+		expected = [40, 85, 160];
+		voc.walk(vec).should.eql(expected);
+
+		vec[0] = 4.0;
+		voc.init(vec);
+		expected = [45, 200, 240];
+		voc.walk(vec).should.eql(expected);
+
+		vec[1] = 1.0;
+		voc.init(vec);
+		expected = [45, 200, 250];
+		voc.walk(vec).should.eql(expected);
+
+		vec[1] = 2.0;
+		voc.init(vec);
+		expected = [45, 210, 280];
+		voc.walk(vec).should.eql(expected);
+
+		vec[1] = 4.0;
+		voc.init(vec);
+		expected = [55, 320, 360];
+		voc.walk(vec).should.eql(expected);
+
+		vec[2] = 2.0;
+		voc.init(vec);
+		expected = [55, 340, 400];
+		voc.walk(vec).should.eql(expected);
+
+		vec[2] = 4.0;
+		voc.init(vec);
+		expected = [75, 440, 480];
+		voc.walk(vec).should.eql(expected);
+
+		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
+		voc.init(vec);
+		expected = [70, 535, 575];
+		voc.walk(vec).should.eql(expected);
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
 		var dv = voc.view;
@@ -168,14 +229,14 @@ describe("Voctopus", function() {
 		dv.getUint8(205).should.eql(12, "voxel's material value is correct");
 	});
 	it("should get and set voxels", function() {
-		this.timeout(3000);
 		voc = new Voctopus(3, schema);
-		var i, fy = () => i = 0;
+		var i = 0, count = 0, fy = () => i = 0;
 		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => {
-				voc.setVoxel(pos, {m:i});
-				voc.getVoxel(pos).should.eql({m:i}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+i);
-				i++;
+				voc.setVoxel(pos, {m:count});
+				voc.getVoxel(pos).should.eql({m:count}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+(count));
+				if(count < 254) count++;
+				else count = 0;
 			}
 		});
 	});
@@ -200,28 +261,14 @@ describe("Voctopus", function() {
 			da.getUint8(i).should.eql(db.getUint8(i));
 		}
 	});
-	it("should write a full octet in one pass with set.octet", function() {
+	it("should write a full octet in one pass", function() {
 		var dv = voc.view;
 		var vec = Uint32Array.of(0,0,0);
-		voc.init(vec);
-		let index = voc.walk(vec)[voc.depth-1];
+		let index = voc.init(vec);
 		let data = [{m:0},{m:1},{m:2},{m:3},{m:4},{m:5},{m:6},{m:7}];
-		voc.set.octet(index, data);
+		voc.setOctet(vec, data);
 		for(let i = 0; i < 8; ++i) {
-			let index2 = index+voc.octantSize*i;
-			dv.getUint8(index2).should.eql(i);
+			dv.getUint8(index+voc.octantSize*i).should.eql(i);
 		}
-	});
-	it("should initialize an octet's data to zero using initializeOctet", function() {
-		var index;
-		// set the voxel first so we're grabbing the right data with getVoxel
-		index = voc.setVoxel([0,0,0], {m:12});
-		// the tree was empty so the start of the leaf octet should be 264 for a tree of depth 5 (calculated externally) 
-		voc.initializeOctet(index); // initialize the octet beginning at offset 1, which is the second down from root octant
-		voc.get(index).should.eql({m:0});
-	});
-	xit("should prune redundant branches using prune", function() {
-		var i = 0;
-		loop3D(16, {y:() => i++, z:(pos)=> voc.setVoxel(pos, {r:i,g:i,b:i,m:i})});
 	});
 });

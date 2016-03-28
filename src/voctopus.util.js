@@ -36,14 +36,28 @@ function sump8(n) {
  * Find the cardinal identity (0-7) of an octant. Octets contain 8 octants, so in 
  * x,y,z order they live at identities 0-7.
  * @param {vector} vector representing the absolute coordinate of a voxel at max depth 
- * @param {int} d depth offset (max depth - current depth)
+ * @param {int} dc current depth (zero-indexed)
+ * @param {int} dm maximum depth
  * @return {int} identity
  */
-function octantIdentity(v, d) {
+function octantIdentity(v, dc, dm) {
+	let d = dm - 1 - dc;
 	return (((v[2] >>> d) & 1) << 2 | 
 					((v[1] >>> d) & 1) << 1 |
 					((v[0] >>> d) & 1) 
 				 );
+}
+
+/**
+ * Find the offset of an octant.
+ * @param {vector} vector representing the absolute coordinate of a voxel at max depth 
+ * @param {int} dc current depth (zero-indexed)
+ * @param {int} dm maximum depth
+ * @param {int} os octant size
+ * @return {int} offset
+ */
+function octantOffset(v, dc, dm, os) {
+	return octantIdentity(v, dc, dm)*os;
 }
 
 /**
@@ -113,8 +127,11 @@ function loop3D(size, cbs) {
 	cby = typeof(cbs.y) === "function"?cbs.y:function(){};
 	cbz = typeof(cbs.z) === "function"?cbs.z:function(){};
 	for(v[0] = 0; v[0] < size; ++v[0]) {
+		v[1] = 0;
+		v[2] = 0;
 		cbx(v);
 		for(v[1] = 0; v[1] < size; ++v[1]) {
+			v[2] = 0;
 			cby(v);
 			for(v[2] = 0; v[2] < size; ++v[2]) {
 				cbz(v);
@@ -219,6 +236,7 @@ module.exports.maxAddressableOctreeDepth = maxAddressableOctreeDepth;
 module.exports.coordinateSpace = coordinateSpace;
 module.exports.maxOctreeDensityFactor = maxOctreeDensityFactor;
 module.exports.octantIdentity = octantIdentity;
+module.exports.octantOffset = octantOffset;
 module.exports.npot = npot;
 module.exports.loop3D = loop3D;
 module.exports.getterFactory = getterFactory;

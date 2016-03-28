@@ -29,7 +29,7 @@ describe("RGBM Schema", function() {
 	it("should get and set voxels", function() {
 		this.timeout(3000);
 		var i, index, count = 0, fy = () => i = 0;
-		voc = new Voctopus(5, schema);
+		voc = new Voctopus(3, schema);
 		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				index = voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3});
@@ -59,7 +59,7 @@ describe("I8M24P Schema", function() {
 	it("should get and set voxels", function() {
 		this.timeout(10000);
 		var i, index, count = 0, fy = () => i = 0;
-		voc = new Voctopus(5, schema);
+		voc = new Voctopus(3, schema);
 		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => { 
 				index = voc.setVoxel(pos, {m:i});

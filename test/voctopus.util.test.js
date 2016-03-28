@@ -1,6 +1,5 @@
 "use strict";
 require("should");
-const Voctopus = require("../src/voctopus.core.js").Voctopus;
 const {sump8, fullOctreeSize, maxAddressableOctreeDepth, 
        maxOctreeDensityFactor, coordinateSpace, npot,
 			 octantIdentity
@@ -97,37 +96,55 @@ describe("util functions", function() {
 	});
 	it("should yield expected octant offsets (range 0-7 * octantSize) for a position vector", function() {
 		var d = 5;
-		// should always return 0 at depth 0 for octantIdentity
-		octantIdentity([ 0, 0, 0], 5).should.equal(0);
-		octantIdentity([31, 0, 0], 5).should.equal(0);
-		octantIdentity([ 0,31, 0], 5).should.equal(0);
-		octantIdentity([31,31, 0], 5).should.equal(0);
-		octantIdentity([ 0, 0,31], 5).should.equal(0);
-		octantIdentity([31, 0,31], 5).should.equal(0);
-		octantIdentity([ 0,31,31], 5).should.equal(0);
-		octantIdentity([31,31,31], 5).should.equal(0);
 		var i;
 		// These should have the same identity at any depth
-		for(i = 1; i < d; i++) {
-			octantIdentity([ 0, 0, 0], d - i).should.equal(0);
-			octantIdentity([31, 0, 0], d - i).should.equal(1);
-			octantIdentity([ 0,31, 0], d - i).should.equal(2);
-			octantIdentity([31,31, 0], d - i).should.equal(3);
-			octantIdentity([ 0, 0,31], d - i).should.equal(4);
-			octantIdentity([31, 0,31], d - i).should.equal(5);
-			octantIdentity([ 0,31,31], d - i).should.equal(6);
-			octantIdentity([31,31,31], d - i).should.equal(7);
+		for(i = 0; i < d; ++i) {
+			octantIdentity([ 0, 0, 0], i, d).should.equal(0);
+			octantIdentity([31, 0, 0], i, d).should.equal(1);
+			octantIdentity([ 0,31, 0], i, d).should.equal(2);
+			octantIdentity([31,31, 0], i, d).should.equal(3);
+			octantIdentity([ 0, 0,31], i, d).should.equal(4);
+			octantIdentity([31, 0,31], i, d).should.equal(5);
+			octantIdentity([ 0,31,31], i, d).should.equal(6);
+			octantIdentity([31,31,31], i, d).should.equal(7);
 		}
-		// for d == 2, coordinates corresponding to octet voc.octantSize at d == 1)
-		for(i = 2; i < d; i++) {
-			octantIdentity([ 0, 0, 0], 3).should.equal(0);
-			octantIdentity([15, 0, 0], 3).should.equal(1);
-			octantIdentity([ 0,15, 0], 3).should.equal(2);
-			octantIdentity([15,15, 0], 3).should.equal(3);
-			octantIdentity([ 0, 0,15], 3).should.equal(4);
-			octantIdentity([15, 0,15], 3).should.equal(5);
-			octantIdentity([ 0,15,15], 3).should.equal(6);
-			octantIdentity([15,15,15], 3).should.equal(7);
+		for(i = 1; i < d; ++i) {
+			octantIdentity([ 0, 0, 0], i, d).should.equal(0);
+			octantIdentity([15, 0, 0], i, d).should.equal(1);
+			octantIdentity([ 0,15, 0], i, d).should.equal(2);
+			octantIdentity([15,15, 0], i, d).should.equal(3);
+			octantIdentity([ 0, 0,15], i, d).should.equal(4);
+			octantIdentity([15, 0,15], i, d).should.equal(5);
+			octantIdentity([ 0,15,15], i, d).should.equal(6);
+			octantIdentity([15,15,15], i, d).should.equal(7);
 		}
+		for(i = 2; i < d; ++i) {
+			octantIdentity([ 0, 0, 0], i, d).should.equal(0);
+			octantIdentity([ 7, 0, 0], i, d).should.equal(1);
+			octantIdentity([ 0, 7, 0], i, d).should.equal(2);
+			octantIdentity([ 7, 7, 0], i, d).should.equal(3);
+			octantIdentity([ 0, 0, 7], i, d).should.equal(4);
+			octantIdentity([ 7, 0, 7], i, d).should.equal(5);
+			octantIdentity([ 0, 7, 7], i, d).should.equal(6);
+			octantIdentity([ 7, 7, 7], i, d).should.equal(7);
+		}
+		for(i = 3; i < d; ++i) {
+			octantIdentity([ 0, 0, 0], i, d).should.equal(0);
+			octantIdentity([ 3, 0, 0], i, d).should.equal(1);
+			octantIdentity([ 0, 3, 0], i, d).should.equal(2);
+			octantIdentity([ 3, 3, 0], i, d).should.equal(3);
+			octantIdentity([ 0, 0, 3], i, d).should.equal(4);
+			octantIdentity([ 3, 0, 3], i, d).should.equal(5);
+			octantIdentity([ 0, 3, 3], i, d).should.equal(6);
+			octantIdentity([ 3, 3, 3], i, d).should.equal(7);
+		}
+		octantIdentity([ 0, 0, 0], 4, d).should.equal(0);
+		octantIdentity([ 1, 0, 0], 4, d).should.equal(1);
+		octantIdentity([ 0, 1, 0], 4, d).should.equal(2);
+		octantIdentity([ 1, 1, 0], 4, d).should.equal(3);
+		octantIdentity([ 0, 0, 1], 4, d).should.equal(4);
+		octantIdentity([ 1, 0, 1], 4, d).should.equal(5);
+		octantIdentity([ 0, 1, 1], 4, d).should.equal(6);
+		octantIdentity([ 1, 1, 1], 4, d).should.equal(7);
 	});
 });
