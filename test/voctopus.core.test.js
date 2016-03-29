@@ -155,6 +155,27 @@ describe("Voctopus", function() {
 			}
 		}});
 	});
+	it("should maintain integrity of the buffer during an expansion", function() {
+		this.timeout(10000);
+		var i, voc, size, index, count = 0, a, b, da, db;
+		voc = new Voctopus(6, schema);
+		loop3D(size, {
+			y:() => i = 0, z:(pos) => {
+				index = voc.setVoxel(pos, {m:i});
+				i++;
+				count++; 
+			}
+		});
+		a = voc.buffer;
+		voc.expand();
+		b = voc.buffer;
+		da = new DataView(a);
+		db = new DataView(b);
+		let end = Math.pow(size+1, 3)*voc.octantSize;
+		for(i = 0; i < end; i++) {
+			da.getUint8(i).should.eql(db.getUint8(i));
+		}
+	});
 	it("should walk the octree, returning an array of pointers", function() {
 		// use a smaller tree for these tests because it's less math to reason about
 		voc = new Voctopus(3, schema);
@@ -239,27 +260,6 @@ describe("Voctopus", function() {
 				else count = 0;
 			}
 		});
-	});
-	it("should maintain integrity of the buffer during an expansion", function() {
-		this.timeout(10000);
-		var i, voc, size, index, count = 0, a, b, da, db;
-		voc = new Voctopus(6, schema);
-		loop3D(size, {
-			y:() => i = 0, z:(pos) => {
-				index = voc.setVoxel(pos, {m:i});
-				i++;
-				count++; 
-			}
-		});
-		a = voc.buffer;
-		voc.expand();
-		b = voc.buffer;
-		da = new DataView(a);
-		db = new DataView(b);
-		let end = Math.pow(size+1, 3)*voc.octantSize;
-		for(i = 0; i < end; i++) {
-			da.getUint8(i).should.eql(db.getUint8(i));
-		}
 	});
 	it("should write a full octet in one pass", function() {
 		var dv = voc.view;

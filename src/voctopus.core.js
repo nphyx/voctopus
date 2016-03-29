@@ -104,15 +104,17 @@ function Voctopus(depth, schema = schemas.RGBM) {
  * @param {int} depth number of depth levels to walk through (default this.depth)
  * @param {int} c start pointer (defaults to start of root octet)
  * @return {array} indexes of octant at each branch
+ * @example
+ * let voc = new Voctopus(5);
  */
-Voctopus.prototype.walk = function(v, depth = this.depth, c = undefined) {
+Voctopus.prototype.walk = function(v, depth = this.depth - 1, c = undefined) {
 	// object property lookups can be really slow so predefine things here
 	let	dc = 0, dm = this.depth, pGet = this.get.p, os = this.octantSize, stack = [];
 	if(c === undefined) c = this.firstOffset + octantOffset(v, 0, dm, os);
 	stack.push(c);
 
 	// walk the tree til we reach the end of a branch
-	while ((c = pGet(c)) !== 0 && ++dc < depth) {
+	while ((c = pGet(c)) !== 0 && ++dc <= depth) {
 		c += octantOffset(v,dc,dm,os);
 		stack.push(c);
 	}
@@ -126,6 +128,9 @@ Voctopus.prototype.walk = function(v, depth = this.depth, c = undefined) {
  * @param {int} depth depth to initialize at (default this.depth)
  * @param {bool} init if true, initializes new octants as it walks (default false)
  * @return {int} index
+ * @example
+ * let voc = new Voctopus(5);
+ * voc.init([9,3,2]); // 1536 (index)
  */
 Voctopus.prototype.init = function(v, depth = this.depth - 1) {
 	let dm = this.depth, os = this.octantSize,
@@ -149,55 +154,73 @@ Voctopus.prototype.init = function(v, depth = this.depth - 1) {
 }
 
 /**
- * Gets the properties of an octant at the specified index.
- * @param {int} ptr index to set
+ * Gets the properties of an octant at the specified index. If the index is invalid
+ * you'll get back garbage data, so use with care.
+ * @param {int} index index to set
  * @return {voxel}
+ * @example
+ * let voc = new Voctopus(5);
+ * let index = voc.init([9,3,2]); // initializes the voxel at 9,3,2 and returns its index 
+ * voc.get(index); // {r:0,g:0,b:0,m:0}
  */
-Voctopus.prototype.get = function(ptr) {
+Voctopus.prototype.get = function(index) {
 	let voxel = Object.create(this.voxel);
 	let {getters, labels, offsets, view} = this;
 	for(let i = 1, len = labels.length; i < len; ++i) {
-		voxel[labels[i]] = getters[i].call(view, ptr+offsets[i]);
+		voxel[labels[i]] = getters[i].call(view, index+offsets[i]);
 	}
 	return voxel;
 }
 
 /**
- * Sets the properties of an octant at the specified ptr.
- * @param {int} ptr index to set
- * @param {object} props a property object, members corresponding to the schema
+ * Sets the properties of an octant at the specified index. Be careful with using it 
+ * directly. If the index is off it will corrupt the octree.
+ * @param {int} index index to write to
+ * @param {object} voxel voxel data to write (may be partial)
  * @return {undefined}
+ * @example
+ * let voc = new Voctopus(5);
+ * let index = voc.init([9,3,2]); // initializes the voxel at 9,3,2 and returns its index 
+ * voc.set(index, {r:232,g:19,b:22,m:4}); // you can supply all properties
+ * voc.set(index, {r:232,m:13}); // or just some of them 
  */
-Voctopus.prototype.set = function(ptr, props) {
-	let prop;
-	let {setters, labels, offsets, view} = this;
+Voctopus.prototype.set = function(index, voxel) {
+	let {setters, labels, offsets, view} = this, prop;
 	for(let i = 1, len = labels.length; i < len; ++i) {
-		prop = props[labels[i]];
+		prop = voxel[labels[i]];
 		if(prop !== undefined) {
-			setters[i].call(view, ptr+offsets[i], prop);
+			setters[i].call(view, index+offsets[i], prop);
 		}
 	}
 }
 
 /**
- * Gets the properties of a voxel at a given coordinate vector.
+ * Gets the properties of a voxel at a given coordinate and (optional) depth.
  * @param {vector} v [x,y,z] position
+ * @param {depth} d max depth to read from (default max depth)
  * @return {voxel}
+ * @example
+ * var voc = new Voctopus(5, schemas.RGBM);
+ * voc.getVoxel([13,22,1], 4); // {r:0,g:0,b:0,m:0} (index)
  */
-Voctopus.prototype.getVoxel = function(v) {
-	let ptr = this.walk(v)[this.depth-1];
-	let props = this.get(ptr);
+Voctopus.prototype.getVoxel = function(v, d = this.depth) {
+	let indices = this.walk(v, d);
+	let props = this.get(indices[indices.length - 1]);
 	return props;
 }
 
 /**
- * Sets the properties of an octant at a given coordinate vector..
+ * Sets the properties of an octant at a given coordinate and (optional) depth.
  * @param {vector} v [x,y,z] position 
  * @param {object} props a property object, members corresponding to the schema
+ * @param {depth} d depth to write at (default max depth)
  * @return {index} pointer to the voxel that was set
+ * @example
+ * var voc = new Voctopus(5, schemas.RGBM);
+ * voc.setVoxel([13,22,1], {r:122,g:187,b:1234,m:7}, 4); // 1536 (index)
  */
-Voctopus.prototype.setVoxel = function(v, props) {
-	let ptr = this.init(v);
+Voctopus.prototype.setVoxel = function(v, props, d = this.depth - 1) {
+	let ptr = this.init(v, d);
 	this.set(ptr, props);
 	return ptr;
 }
@@ -236,6 +259,88 @@ Voctopus.prototype.expand = function() {
 	this.view = new DataView(this.buffer);
 	defineAccessors(this);
 	return true;
+}
+
+/**
+ * Gets an array of each voxel in an octet. Pointers are managed automatically.
+ * This can be a big performance boost when you have multiple voxels to write to the
+ * same octet, since it avoids redundant traversal. Octet location is automatically
+ * derived from the given vector so it doesn't have to point at the first voxel in
+ * the octet. If the octet doesn't currently exist in the tree it will be initialized.
+ *
+ * @param {vector} v coordinates of voxel
+ * @param {depth} d depth to write at (default max depth)
+ * @return {array} array of 8 voxels ordered by identity (@see voctopus/util#octetIdentity)
+ * @example
+ * let voc = new Voctopus(5, schemas.I8M16P);
+ * voc.getOctet([0,0,0], 3)
+ * 	.map((voxel) => console.log(voxel)); // {m:0} (x8)
+ */
+Voctopus.prototype.getOctet = function(v, depth = this.depth - 1) {
+	let ptr = this.init(v, depth), os = this.octetSize, vs = this.octantSize;
+	let {getters, labels, offsets, view} = this;
+	let i, n, len = labels.length;
+	let get, offset, label, pb;
+	ptr = ptr - ptr % os;
+	var octetArray = [{},{},{},{},{},{},{},{}];
+	for(n = 1; n < len; ++n) {
+		get = getters[n];
+		offset = offsets[n];
+		label = labels[n];
+		pb = ptr;
+		for(i = 0; i < 8; ++i) {
+			octetArray[i][label] = get.call(view, pb+offset);
+			pb += vs;
+		}
+	}
+	return octetArray;
+}
+
+/**
+ * Sets the data for each element in an octet. Pointers are managed automatically.
+ * This can be a big performance boost when you have multiple voxels to write to the
+ * same octet, since it avoids redundant traversal. Octet location is automatically
+ * derived from the given vector so it doesn't have to point at the first voxel in
+ * the octet. If the octet doesn't currently exist in the tree it will be initialized.
+ *
+ * @param {vector} v position vector for target octet 
+ * @param {array} data data to write, as an array of 8 objects (see example)
+ * @param {depth} d depth to write at (default max depth)
+ * @return {undefined}
+ * @example
+ * let voc = new Voctopus(6, schemas.RGBM);
+ * let data = array[
+ * 	 {}, // members may be empty, but must be present so the indexes are correct
+ * 	 {r:210,g:12,b:14,m:2}, // can use all properties
+ * 	 {r:7},   // or
+ * 	 {g:82},  // any
+ * 	 {b:36},  // combination
+ * 	 {r:255}, // thereof
+ * 	 {},
+ * 	 {}
+ * ];
+ * // in this example, walk to the second-lowest depth to find the pointer
+ * voc.set.octet([0,0,1], data); // and done!
+ */
+Voctopus.prototype.setOctet = function(v, data, depth = this.depth - 1) {
+	let ptr = this.init(v, depth), os = this.octetSize, vs = this.octantSize, prop;
+	let {setters, labels, offsets, view} = this;
+	let i, n, len = labels.length;
+	let set, offset, label, pb;
+	ptr = ptr - ptr % os;
+	for(n = 1; n < len; ++n) {
+		set = setters[n];
+		offset = offsets[n];
+		label = labels[n];
+		pb = ptr;
+		for(i = 0; i < 8; ++i) {
+			prop = data[i][label];
+			if(prop !== undefined) {
+				set.call(view, pb+offset, prop);
+			}
+			pb += vs;
+		}
+	}
 }
 
 /**
@@ -282,80 +387,9 @@ function recurseSubtree(a, stack, tx0,ty0,tz0, tx1,ty1,tz1, voc, ptr) {
 */
 
 /**
- * Gets an array of each voxel in an octet.
- * @param {vector} v coordinates of voxel
- * @return {array} array of 8 voxels ordered by identity (@see voctopus/util#octetIdentity)
- */
-Voctopus.prototype.getOctet = function(v) {
-	let ptr = this.init(v), os = this.octetSize, vs = this.octantSize;
-	let {getters, labels, offsets, view} = this;
-	let i, n, len = labels.length;
-	let get, offset, label, pb;
-	ptr = ptr - ptr % os;
-	var octetArray = [{},{},{},{},{},{},{},{}];
-	for(n = 1; n < len; ++n) {
-		get = getters[n];
-		offset = offsets[n];
-		label = labels[n];
-		pb = ptr;
-		for(i = 0; i < 8; ++i) {
-			octetArray[i][label] = get.call(view, pb+offset);
-			pb += vs;
-		}
-	}
-	return octetArray;
-}
-
-/**
- * Sets the data for each element in an octet. Pointers are managed automatically.
- * This can be a big performance boost when you have multiple voxels to write to the
- * same octet, since it avoids redundant traversal.
- *
- * @param {int} index
- * @param {array} data 8-element array of objects containing voxel properties
- * @example
- * let voc = new Voctopus(6);
- * let data = array[
- * 	 {}, // members may be empty, but must be present so the indexes are correct
- * 	 {r:210,g:12,b:14,m:2}, // can use all properties
- * 	 {r:7},   // or
- * 	 {g:82},  // any
- * 	 {b:36},  // combination
- * 	 {r:255}, // thereof
- * 	 {},
- * 	 {}
- * ];
- * // in this example, walk to the second-lowest depth to find the pointer
- * voc.init([0,0,1]);
- * let index = voc.walk([0,0,1]).p;
- * voc.set.octet(index, data); // and done!
- * @return {undefined}
- */
-Voctopus.prototype.setOctet = function(vec, data) {
-	let ptr = this.init(vec), os = this.octetSize, vs = this.octantSize, prop;
-	let {setters, labels, offsets, view} = this;
-	let i, n, len = labels.length;
-	let set, offset, label, pb;
-	ptr = ptr - ptr % os;
-	for(n = 1; n < len; ++n) {
-		set = setters[n];
-		offset = offsets[n];
-		label = labels[n];
-		pb = ptr;
-		for(i = 0; i < 8; ++i) {
-			prop = data[i][label];
-			if(prop !== undefined) {
-				set.call(view, pb+offset, prop);
-			}
-			pb += vs;
-		}
-	}
-}
-
-/**
  * @private
  * Defines accessors for a voctopus object. Called during initialization and any time
- * the buffer is updated.
+ * the buffer is expanded (since the view will need to be re-bound).
  */
 function defineAccessors(voc) {
 	var offset = 0, i, len;
