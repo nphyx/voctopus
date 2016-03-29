@@ -35,7 +35,7 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	 * calculate the size of a single octant based on the sum of lengths of properties 
 	 * in the schema. the size of an octant is just the size of 8 octets
 	 */
-	octantSize = schema.reduce((prev, cur) => prev += cur.length, 0);
+	octantSize = schema.reduce((prev, cur) => prev += cur.type.length, 0);
 	octetSize = octantSize * 8;
 	maxSize = npot(fullOctreeSize(octantSize, depth));
 	dimensions = Math.pow(2, depth);
@@ -81,44 +81,19 @@ function Voctopus(depth, schema = schemas.RGBM) {
 	firstOffset = octetSize;
 	nextOctet = firstOffset+octetSize;
 
+	this.getters = new Array(this.schema.length);
+	this.setters = new Array(this.schema.length);
+	this.labels  = new Array(this.schema.length);
+	this.offsets = new Array(this.schema.length);
 	defineAccessors(this);
+
+	// set up the voxel class - this will help js engines optimize 
+	this.voxel = {}; 
 
 	// initialize the root node
 	this.set.p(0, this.octetSize);
 
-	// set up the voxel class - this will help js engines optimize 
-	this.voxel = {}; 
-	this.fields = [];
-	this.setters = {};
-	this.getters = {};
-	for(let i = 0, l = this.schema.length; i < l; ++i) {
-		let label = this.schema[i].label;
-		if(label !== "p") {
-			this.fields.push(label);
-			this.getters[label] = getterFor(this.schema[i].length);
-			this.setters[label] = setterFor(this.schema[i].length);
-			this.voxel[label] = 0;
-		}
-	}
 	return this;
-}
-
-function setterFor(len) {
-	switch(len) {
-		case 1: return DataView.prototype.setUint8;
-		case 2: return DataView.prototype.setUint16;
-		case 3: return DataView.prototype.setUint32;
-		case 4: return DataView.prototype.setFloat64;
-	}
-}
-
-function getterFor(len) {
-	switch(len) {
-		case 1: return DataView.prototype.getUint8;
-		case 2: return DataView.prototype.getUint16;
-		case 3: return DataView.prototype.getUint32;
-		case 4: return DataView.prototype.getFloat64;
-	}
 }
 
 /**
@@ -175,29 +150,32 @@ Voctopus.prototype.init = function(v, depth = this.depth - 1) {
 
 /**
  * Gets the properties of an octant at the specified index.
- * @param {int} index
+ * @param {int} ptr index to set
  * @return {voxel}
  */
-Voctopus.prototype.get = function(index) {
-	var voxel = Object.create(this.voxel);
-	for(let i = 0, l = this.fields.length; i < l; i++) {
-		let label = this.fields[i];
-		voxel[label] = this.get[label](index);
+Voctopus.prototype.get = function(ptr) {
+	let voxel = Object.create(this.voxel);
+	let {getters, labels, offsets, view} = this;
+	for(let i = 1, len = labels.length; i < len; ++i) {
+		voxel[labels[i]] = getters[i].call(view, ptr+offsets[i]);
 	}
 	return voxel;
 }
 
 /**
- * Sets the properties of an octant at the specified index.
- * @param {int} index
+ * Sets the properties of an octant at the specified ptr.
+ * @param {int} ptr index to set
  * @param {object} props a property object, members corresponding to the schema
  * @return {undefined}
  */
-Voctopus.prototype.set = function(index, props) {
-	for(let i = 0, l = this.fields.length; i < l; i++) {
-		let label = this.fields[i];
-		let prop = props[label];
-		if(prop !== undefined) this.set[label](index, prop);
+Voctopus.prototype.set = function(ptr, props) {
+	let prop;
+	let {setters, labels, offsets, view} = this;
+	for(let i = 1, len = labels.length; i < len; ++i) {
+		prop = props[labels[i]];
+		if(prop !== undefined) {
+			setters[i].call(view, ptr+offsets[i], prop);
+		}
 	}
 }
 
@@ -310,13 +288,22 @@ function recurseSubtree(a, stack, tx0,ty0,tz0, tx1,ty1,tz1, voc, ptr) {
  */
 Voctopus.prototype.getOctet = function(v) {
 	let ptr = this.init(v), os = this.octetSize, vs = this.octantSize;
-	let get = this.get.bind(this);
-	let voxels = [];
+	let {getters, labels, offsets, view} = this;
+	let i, n, len = labels.length;
+	let get, offset, label, pb;
 	ptr = ptr - ptr % os;
-	for(var i = 0; i < 8; ++i) {
-		voxels.push(get(ptr+i*vs));
+	var octetArray = [{},{},{},{},{},{},{},{}];
+	for(n = 1; n < len; ++n) {
+		get = getters[n];
+		offset = offsets[n];
+		label = labels[n];
+		pb = ptr;
+		for(i = 0; i < 8; ++i) {
+			octetArray[i][label] = get.call(view, pb+offset);
+			pb += vs;
+		}
 	}
-	return voxels;
+	return octetArray;
 }
 
 /**
@@ -345,11 +332,23 @@ Voctopus.prototype.getOctet = function(v) {
  * @return {undefined}
  */
 Voctopus.prototype.setOctet = function(vec, data) {
-	let ptr = this.init(vec), os = this.octetSize, vs = this.octantSize;
-	let set = this.set.bind(this);
+	let ptr = this.init(vec), os = this.octetSize, vs = this.octantSize, prop;
+	let {setters, labels, offsets, view} = this;
+	let i, n, len = labels.length;
+	let set, offset, label, pb;
 	ptr = ptr - ptr % os;
-	for(var i = 0; i < 8; ++i) {
-		set(ptr+i*vs, data[i]);
+	for(n = 1; n < len; ++n) {
+		set = setters[n];
+		offset = offsets[n];
+		label = labels[n];
+		pb = ptr;
+		for(i = 0; i < 8; ++i) {
+			prop = data[i][label];
+			if(prop !== undefined) {
+				set.call(view, pb+offset, prop);
+			}
+			pb += vs;
+		}
 	}
 }
 
@@ -359,15 +358,21 @@ Voctopus.prototype.setOctet = function(vec, data) {
  * the buffer is updated.
  */
 function defineAccessors(voc) {
-	var i, len;
+	var offset = 0, i, len;
 	for(i = 0, len = voc.schema.length; i < len; ++i) {
-		let {label, offset, length} = voc.schema[i];
-		voc.get[label] = getterFactory(length, offset, voc.view);
-		voc.set[label] = setterFactory(length, offset, voc.view);
+		let {label, type} = voc.schema[i];
+		let get = getterFactory(type.get, voc.view, offset);
+		let set = setterFactory(type.set, voc.view, offset);
+		voc.get[label] = get;
+		voc.getters[i] = type.get;
+		voc.set[label] = set;
+		voc.setters[i] = type.set;
+		voc.labels[i] = label;
+		voc.offsets[i] = offset;
+		offset += type.length;
 	}
 }
 
 if(typeof(module) !== "undefined") {
 	module.exports.Voctopus = Voctopus;
 }
-

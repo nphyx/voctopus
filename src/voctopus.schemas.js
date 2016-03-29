@@ -1,4 +1,5 @@
 "use strict";
+require("./voctopus.util.js");
 /**
 Voctopus Schemas
 ================
@@ -16,6 +17,24 @@ multiple sibling octrees but maintenance gets more complicated in that case.
 @module voctopus.schemas
 */
 
+const TYPES = {
+	UINT8:{get:DataView.prototype.getUint8, set:DataView.prototype.setUint8, length:1},
+	UINT16:{get:DataView.prototype.getUint16, set:DataView.prototype.setUint16, length:2},
+	UINT24:{get:DataView.prototype.getUint24, set:DataView.prototype.setUint24, length:3},
+	UINT32:{get:DataView.prototype.getUint32, set:DataView.prototype.setUint32, length:4},
+	FLOAT32:{get:DataView.prototype.getFloat32, set:DataView.prototype.setFloat32, length:4},
+	FLOAT64:{get:DataView.prototype.getFloat64, set:DataView.prototype.setFloat64, length:8}
+}
+/*
+const TYPES = {
+	UINT8:{get:"getUint8", set:"setUint8", length:1},
+	UINT16:{get:"getUint16", set:"setUint16", length:2},
+	UINT24:{get:"getUint24", set:"setUint24", length:3},
+	UINT32:{get:"getUint32", set:"setUint32", length:4},
+	FLOAT32:{get:"getFloat32", set:"setFloat32", length:4},
+	FLOAT64:{get:"getFloat64", set:"setFloat64", length:8}
+}
+*/
 /**
  * Schema for RGB voctants with an additional m index field. Balance
  * between color fidelity and reasonable data footprint. Fields are:
@@ -29,11 +48,11 @@ multiple sibling octrees but maintenance gets more complicated in that case.
  *  The total size of a RGBM octet is thus 64 bits or 8 bytes.
  */
 const RGBM = [
-	{label:"r",offset:0,length:1},
-	{label:"g",offset:1,length:1},
-	{label:"b",offset:2,length:1},
-	{label:"m",offset:3,length:1},
-	{label:"p",offset:4,length:4}
+	{label:"p",type:TYPES.UINT32}, //offset:4,length:4}
+	{label:"r",type:TYPES.UINT8}, //offset:0,length:1},
+	{label:"g",type:TYPES.UINT8}, //offset:1,length:1},
+	{label:"b",type:TYPES.UINT8}, //offset:2,length:1},
+	{label:"m",type:TYPES.UINT8} //offset:3,length:1},
 ];
 
 /**
@@ -43,8 +62,8 @@ const RGBM = [
  *  The total size of an I8M otet is thus 32 bits or 4 bytes.
  */
 const I8M24P = [
-	{label:"m",offset:0,length:1},
-	{label:"p",offset:1,length:3}
+	{label:"p",type:TYPES.UINT24},//offset:1,length:3}
+	{label:"m",type:TYPES.UINT8}//offset:0,length:1},
 ];
 
 /**
@@ -54,12 +73,38 @@ const I8M24P = [
  *  The total size of an I8M otet is thus 32 bits or 4 bytes.
  */
 const I8M16P = [
-	{label:"m",offset:0,length:1},
-	{label:"p",offset:1,length:2}
+	{label:"p",type:TYPES.UINT16},//offset:1,length:3}
+	{label:"m",type:TYPES.UINT8}//offset:0,length:1},
+];
+
+/**
+ * Schema for m index voctants with 32 bit index and 32 bit pointer. Similar cost to RGBM but with a large material index instead of direct RGB values.. Fields are:
+ *  * m: material index (8-bit int)
+ *  * p: 24-bit pointer
+ *  The total size of an I8M otet is thus 32 bits or 4 bytes.
+ */
+const I32M32P = [
+	{label:"p",type:TYPES.UINT32},//offset:1,length:3}
+	{label:"m",type:TYPES.UINT32}//offset:0,length:1},
+];
+
+/**
+ * Schema for m index voctants with 16 bit index and 16 bit pointer. Cleanly offset memory footprint, but limited to about 2730 octets - so only use for very small sprites (~16x16x16). Fields are:
+ *  * m: m index (16-bit int)
+ *  * p: 16-bit pointer
+ *  The total size of an I8M otet is thus 32 bits or 4 bytes.
+ */
+
+const I16M16P = [
+	{label:"p",type:TYPES.UINT16},//offset:1,length:3}
+	{label:"m",type:TYPES.UINT16}//offset:0,length:1},
 ];
 
 if(typeof(module.exports) !== "undefined") {
+	module.exports.TYPES = TYPES;
 	module.exports.RGBM = RGBM;
 	module.exports.I8M24P = I8M24P;
 	module.exports.I8M16P = I8M16P;
+	module.exports.I16M16P = I16M16P;
+	module.exports.I32M32P = I32M32P;
 }

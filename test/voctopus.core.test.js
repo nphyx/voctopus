@@ -7,8 +7,8 @@ describe("Voctopus", function() {
 	var d, voc;
 	// we haven't tested schemas yet so let's make a stub
 	var schema = [
-		{label:"m",offset:0,length:1},
-		{label:"p",offset:1,length:4}
+		{label:"p",type:{get:DataView.prototype.getUint32, set:DataView.prototype.setUint32,length:4}},
+		{label:"m",type:{get:DataView.prototype.getUint8, set:DataView.prototype.setUint8,length:1}},
 	];
 	beforeEach("set up a clean voctopus instance", function() {
 		d = 5;
@@ -20,7 +20,7 @@ describe("Voctopus", function() {
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
 		voc.should.have.property("maxSize");
-		voc.should.have.property("fields").eql(["m"]);
+		//voc.should.have.property("fields").eql(["m"]);
 		(typeof(voc.get)).should.equal("function", "method get implemented");
 		(typeof(voc.set)).should.equal("function", "method set implemented");
 		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel implemented");
@@ -51,7 +51,7 @@ describe("Voctopus", function() {
 	});
 	it("should initialize the root pointer to the correct offset", function() {
 		var dv = voc.view;
-		dv.getUint32(1).should.eql(40, "root octant's pointer is pointing at the right offset");
+		dv.getUint32(0).should.eql(40, "root octant's pointer is pointing at the right offset");
 	});
 	it("should correctly implement pointer getters and setters", function() {
 		// implemented?
@@ -217,16 +217,16 @@ describe("Voctopus", function() {
 		// this should make a tree going down to 0,0
 		voc.setVoxel([0,0,0], {m:16});
 		// look at the raw data, since we haven't yet tested getVoxel
-		dv.getUint32(1).should.eql(40, "octant's pointer at depth 1 is pointing at the right offset");
-		dv.getUint32(41).should.eql(80, "octant's pointer at depth 2 is pointing at the right offset");
-		dv.getUint32(81).should.eql(120, "octant's pointer at depth 3 is pointing at the right offset");
-		dv.getUint32(121).should.eql(160, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint32(161).should.eql(200, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint32(201).should.eql(0, "voxel's pointer value is correct");
-		dv.getUint8(200).should.eql(16, "voxel's material value is correct");
+		dv.getUint32(0).should.eql(40, "octant's pointer at depth 1 is pointing at the right offset");
+		dv.getUint32(40).should.eql(80, "octant's pointer at depth 2 is pointing at the right offset");
+		dv.getUint32(80).should.eql(120, "octant's pointer at depth 3 is pointing at the right offset");
+		dv.getUint32(120).should.eql(160, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint32(160).should.eql(200, "octant's pointer at depth 4 is pointing at the right offset");
+		dv.getUint32(200).should.eql(0, "voxel's pointer value is correct");
+		dv.getUint8(204).should.eql(16, "voxel's material value is correct");
 
 		voc.setVoxel([1,0,0], {m:12});
-		dv.getUint8(205).should.eql(12, "voxel's material value is correct");
+		dv.getUint8(209).should.eql(12, "voxel's material value is correct");
 	});
 	it("should get and set voxels", function() {
 		voc = new Voctopus(3, schema);
@@ -268,7 +268,7 @@ describe("Voctopus", function() {
 		let data = [{m:0},{m:1},{m:2},{m:3},{m:4},{m:5},{m:6},{m:7}];
 		voc.setOctet(vec, data);
 		for(let i = 0; i < 8; ++i) {
-			dv.getUint8(index+voc.octantSize*i).should.eql(i);
+			dv.getUint8(index+4+voc.octantSize*i).should.eql(i);
 		}
 	});
 });
