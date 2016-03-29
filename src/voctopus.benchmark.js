@@ -21,7 +21,7 @@ const writeMOct = (voc, pos, i) => {
 
 /* Setup */
 const schemaList = [
-	{name:"RGBM", dmin:4, dmax:8, tests:{
+	{name:"RGBM", depth:8, tests:{
 		object:{
 			read:readObj,
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
@@ -54,13 +54,25 @@ const schemaList = [
 			}
 		}
 	}},
-	{name:"I8M24P", dmin:4, dmax:8, tests:{
+	{name:"I32M32P", depth:8, tests:{
 			object:{read:readObj, write:writeMObj},
 			direct:{read:readMDir, write:writeMDir},
 			octet: {read:readOct, write:writeMOct}
 		}
 	},
-	{name:"I8M16P", dmin:3, dmax:6, tests:{
+	{name:"I8M24P", depth:8, tests:{
+			object:{read:readObj, write:writeMObj},
+			direct:{read:readMDir, write:writeMDir},
+			octet: {read:readOct, write:writeMOct}
+		}
+	},
+	{name:"I16M16P", depth:6, tests:{
+			object:{read:readObj, write:writeMObj},
+			direct:{read:readMDir, write:writeMDir},
+			octet: {read:readOct, write:writeMOct}
+		}
+	},
+	{name:"I8M16P", depth:6, tests:{
 			object:{read:readObj, write:writeMObj},
 			direct:{read:readMDir, write:writeMDir},
 			octet: {read:readOct, write:writeMOct}
@@ -103,13 +115,14 @@ function table(cellw, rows) {
 let time = () => new Date().getTime();
 
 // calculate time elapsed
-let elapsed = (start) => ((time()-start)/1000).toFixed(3)+"s";
+let elapsed = (start) => (time()-start)/1000
+let fmtTime = (time) => time.toFixed(3)+"s";
 
 // timer wrapper
 let stopwatch = (cb) => {
 	let start = time();
 	cb();
-	return elapsed(start);
+	return fmtTime(elapsed(start));
 }
 
 // calculate octets in voctopus
@@ -156,7 +169,7 @@ function cbInit(schema, d) {
 	let size = Math.pow(2, d - 1);
 	let start = time();
 	loop3D(size, {z:(pos) => voc.init(pos)});
-	return elapsed(start);
+	return fmtTime(elapsed(start));
 }
 
 function cbWalk(schema, d) {
@@ -164,10 +177,37 @@ function cbWalk(schema, d) {
 	let size = Math.pow(2, d - 1);
 	let start = time();
 	loop3D(size, {z:(pos) => voc.walk(pos, true)});
-	return elapsed(start);
+	return fmtTime(elapsed(start));
 }
 
-function testRW(testName, schema, d, expand = true) {
+function testMem(schema, d) {
+	let start, rtime, wtime;
+	let testName = "octet";
+	let i = 0, count = 0;
+	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
+	let schemaTests = schema.tests[testName];
+	let write = schemaTests.write.bind(null, voc);
+	let dims = Math.pow(2, d);
+	let cbw = (pos) => {
+		write(pos, i);
+		++i;
+		++count;
+	}
+	let cbr = schemaTests.read.bind(null, voc);
+	let size = Math.pow(2, d - 1)/2;
+	// fudge for octet test
+	start = time();
+	loop3D(size, {y:fy, z:cbw});
+	wtime = fmtTime(elapsed(start));
+	start = time();
+	loop3D(size, {y:fy, z:cbr});
+	rtime = fmtTime(elapsed(start));
+	// fudge for octet test
+	count *= 8;
+	return [d, dims, rtime, wtime, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"];
+}
+
+function testRW(testName, schema, d) {
 	let start, rtime, wtime;
 	let i = 0, count = 0;
 	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
@@ -179,11 +219,11 @@ function testRW(testName, schema, d, expand = true) {
 		++count;
 	}
 	let cbr = schemaTests.read.bind(null, voc);
-	if(expand) {
-		// expand it first so it won't get slowed down arbitrarily
-		let res = 1;
-		while(res) res = voc.expand();
-	}
+
+	// expand it first so it won't get slowed down arbitrarily
+	let res = 1;
+	while(res) res = voc.expand();
+
 	let size = Math.pow(2, d - 1);
 	// fudge for octet test
 	if(testName == "octet") size /= 2;
@@ -195,47 +235,46 @@ function testRW(testName, schema, d, expand = true) {
 	rtime = elapsed(start);
 	// fudge for octet test
 	if(testName == "octet") count *= 8;
-	return [d, rtime, wtime, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"];
+	return [testName, fmtTime(rtime), fmtTime(wtime), Math.round((1/rtime)*count), Math.round((1/wtime)*count), count, calcOctets(voc)];
 }
 
 function benchmark(schema) {
 	let cellw = 8;
-	let {name, dmin, dmax} = schema;
-	let d = dmin;
+	let {name, depth} = schema;
 	console.log("\nSCHEMA "+name);
 	console.log("======="+("=").repeat(name.length));
 	// Initialization benchmarks  
 	let rows = [];
 	console.log("\nInitialization Tests\n--------------------");
-	rows.push(["Depth"].concat(range(dmin, dmax)));
-	rows.push(divider(cellw, new Array(dmax-dmin+2).fill("r")));
-	rows.push(["Create"].concat(iterd(dmin, dmax, cbInst.bind(null, schema))));
-	rows.push(["Expand"].concat(iterd(dmin, dmax, cbExpand.bind(null, schema))));
-	rows.push(["Init"].concat(iterd(dmin, dmax, cbInit.bind(null, schema))));
-	rows.push(["Walk"].concat(iterd(dmin, dmax, cbWalk.bind(null, schema))));
+	rows.push(["Depth"].concat(range(3, depth)));
+	rows.push(divider(cellw, new Array(depth-1).fill("r")));
+	rows.push(["Create"].concat(iterd(3, depth, cbInst.bind(null, schema))));
+	rows.push(["Expand"].concat(iterd(3, depth, cbExpand.bind(null, schema))));
+	rows.push(["Init"].concat(iterd(3, depth, cbInit.bind(null, schema))));
+	rows.push(["Walk"].concat(iterd(3, depth, cbWalk.bind(null, schema))));
 	console.log(table(cellw, rows));
 
 	// Read/Write Benchmarks 
 	console.log("\nR/W Tests\n---------");
 	rows = [];
-	rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
-	rows.push(divider(cellw, ["c","r","r","r","r","r"]));
+	rows.push(["Type", "Read", "Write", "R/s", "W/s", "Voxels", "Octets"]);
+	rows.push(divider(cellw, ["r","r","r","r","r","r","r"]));
 	testList.forEach((testName) => {
-		d = dmin;
-		rows.push(["*"+testName+"*"].concat(new Array(5).fill((" ").repeat(cellw))));
-		for(let max = dmax; d <= max; ++d) {
-			rows.push(testRW(testName, schema, d));
-		}
+		//rows.push(["*"+testName+"*"].concat(new Array(5).fill((" ").repeat(cellw))));
+		//for(let max = depth; d <= max; ++d) {
+			rows.push(testRW(testName, schema, depth));
+		//}
 	});
-
 	console.log(table(cellw, rows));
+
 	console.log("\nMemory Tests\n------------");
 	rows = [];
-	rows.push(["Depth", "Read", "Write", "Voxels", "Octets", "Memory"]);
-	rows.push(divider(cellw, ["c","r","r","r","r","r"]));
-	d = dmin;
-	for(let max = dmax; d <= max; ++d) {
-		rows.push(testRW("direct", schema, d, false));
+	rows.push(["Depth", "Dims", "Read", "Write", "Voxels", "Octets", "Memory"]);
+	rows.push(divider(cellw, ["c","r","r","r","r","r","r"]));
+
+	let d = 5;
+	for(let max = depth; d <= max; ++d) {
+		rows.push(testMem(schema, d));
 	}
 	console.log(table(cellw, rows));
 }
