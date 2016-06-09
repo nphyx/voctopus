@@ -159,33 +159,64 @@ function setterFactory(fn, view, o) {
 		return fn.call(view, i+o, v);
 	}
 }
+
+/**
+ * Check the ray - box intersection of a voxel (which is an axis-aligned bounding box)
+ * @param {vector} bs box start (top, left, back) 
+ * @param {vector} be box end (bottom, right, front)
+ * @param {vector} ro ray origin
+ * @param {vector} rd inverse of ray direction (inverse should be precalculated)
+ * @return bool true if there was a hit, otherwise false
+ */
+function rayAABB(bs, be, ro, rd) {
+	let min = Math.min, max = Math.max;
+	// decompose vectors, saves time referencing
+	// ray origin
+	let ox = ro[0], oy = ro[1], oz = ro[2];
+	// ray direction
+	let dx = rd[0], dy = rd[1], dz = rd[2];
+
+  let tx0 = (bs[0] - ox)*dx;
+  let tx1 = (be[0] - ox)*dx;
+  let ty0 = (bs[1] - oy)*dy;
+  let ty1 = (be[1] - oy)*dy;
+  let tz0 = (bs[2] - oz)*dz;
+  let tz1 = (be[2] - oz)*dz;
+
+  let tmin = max(min(tx0, tx1), min(ty0, ty1), min(tz0, tz1));
+  let tmax = min(max(tx0, tx1), max(ty0, ty1), max(tz0, tz1));
+
+  return tmax >= tmin;
+}
+
 /**
  * Polyfill for ArrayBuffer.transfer. Uses DataView setter/getters to make transfers
  * as fast as possible. Still slow with large buffers, but less slow than copying
  * byte by byte. This has been working for me so far but I'm not 100% sure there
+ *
  * are no bugs or edge cases.
  *
  * @param {ArrayBuffer} buffer original arraybuffer
  * @return {undefined}
  */
 if(typeof(ArrayBuffer.prototype.transfer) === "undefined") {
-	ArrayBuffer.prototype.transfer = function transfer(buffer) {
+	ArrayBuffer.prototype.transfer = function transfer(old) {
 		var dva, dvb, i, mod;
 		dva = new DataView(this);
-		dvb = new DataView(buffer);
-		mod = this.byteLength%8;
-		for(i = 0; i < buffer.byteLength-mod; i+=8) dva.setFloat64(i, dvb.getFloat64(i));
-		mod = this.byteLength%4;
-		for(; i < buffer.byteLength-mod; i+=4) {
+		dvb = new DataView(old);
+		mod = this.byteLength%8+1;
+		for(i = 0; i <= old.byteLength-mod; i+=8) dva.setFloat64(i, dvb.getFloat64(i));
+		mod = this.byteLength%4+1;
+		if(i < old.byteLength-mod) {
 			dva.setUint32(i, dvb.getUint32(i));
+			i += 4;
 		}
-		mod = this.byteLength%2;
-		for(; i < buffer.byteLength-mod; i+=2) {
+		mod = this.byteLength%2+1;
+		if(i < old.byteLength-mod) {
 			dva.setUint16(i, dvb.getUint16(i));
+			i += 2;
 		}
-		for(; i < buffer.byteLength; ++i) {
-			dva.setUint8(i, dvb.getUint8(i));
-		}
+		if(i < old.byteLength) dva.setUint8(i, dvb.getUint8(i));
 	}
 }
 
@@ -201,3 +232,4 @@ module.exports.npot = npot;
 module.exports.loop3D = loop3D;
 module.exports.getterFactory = getterFactory;
 module.exports.setterFactory = setterFactory;
+module.exports.rayAABB = rayAABB;

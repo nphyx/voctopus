@@ -2,7 +2,7 @@
 require("should");
 const {sump8, fullOctreeSize, maxAddressableOctreeDepth, 
        maxOctreeDensityFactor, coordinateSpace, npot,
-			 octantIdentity, loop3D
+			 octantIdentity, loop3D, rayAABB
 			} = require("../src/voctopus.util.js");
 
 describe("The extended DataView", function() {
@@ -165,5 +165,18 @@ describe("util functions", function() {
 		octantIdentity([ 1, 0, 1], 4, d).should.equal(5);
 		octantIdentity([ 0, 1, 1], 4, d).should.equal(6);
 		octantIdentity([ 1, 1, 1], 4, d).should.equal(7);
+	});
+	it("should compute axis-aligned bounding box intersections", function() {
+		let bs = [0,0,0],
+		    be = [32,32,32],
+				// ray vectors are inverted
+				ro = [-16,-16,16],
+				rd = [16, 16, -35];
+		rayAABB(bs, be, ro, rd).should.be.true();
+		rayAABB(bs, be, rd, ro).should.be.false();
+		// start outside the box and never reach it 
+		rayAABB([64,64,64],[128,128,128],ro,rd).should.be.false();
+		// start outside the box and travel diagonally through it
+		rayAABB(bs, be, [16,16,16],[-64,-64,-64]).should.be.true();
 	});
 });
