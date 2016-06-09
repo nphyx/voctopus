@@ -5,12 +5,12 @@ const loop3D = require("./voctopus.util.js").loop3D;
 // use a lot of globals because it has less impact on run time
 const testList = ["object", "direct", "octet"];
 
-const readObj = (voc, pos) => voc.getVoxel(pos), tmpvec = new Float32Array(3);
-const readOct = (voc, pos) => {
+const readObj = (voc, pos, out) => voc.getVoxel(pos, out), tmpvec = new Float32Array(3);
+const readOct = (voc, pos, out) => {
 	tmpvec[0] = pos[0]*2; tmpvec[1] = pos[1]*2; tmpvec[2] = pos[2]*2;
-	for(var n = 0; n < 8; n++) voc.getOctet(tmpvec);
+	voc.getOctet(tmpvec, out);
 }
-const readMDir = (voc, pos) => voc.get.m(voc.init(pos));
+const readMDir = (voc, pos, out) => out.m = voc.get.m(voc.step(pos));
 const writeMObj = (voc, pos, i) => voc.set(voc.init(pos), {m:i});
 const writeMDir = (voc, pos, i) => voc.set.m(voc.init(pos), i);
 const writeMOct = (voc, pos, i) => {
@@ -27,9 +27,12 @@ const schemaList = [
 			write:(voc, pos, i) => voc.setVoxel(pos, {r:i,g:i+1,b:i+2,m:i+3})
 		},
 		direct:{
-			read:(voc, pos) => {
-				let ptr = voc.init(pos);
-				voc.get.r(ptr); voc.get.g(ptr); voc.get.b(ptr); voc.get.m(ptr);
+			read:(voc, pos, out) => {
+				let ptr = voc.step(pos);
+				out.r = voc.get.r(ptr); 
+				out.g = voc.get.g(ptr); 
+				out.b = voc.get.b(ptr); 
+				out.m = voc.get.m(ptr);
 			},
 			write:(voc, pos, i) => {
 				let ptr = voc.init(pos);
@@ -134,9 +137,6 @@ let calcOctets = (voc) => {
 // bytes as mb
 let inMB = (b) => (b/1024/1024).toFixed(3);
 
-// loop3D y func resets i
-let fy = (i) => i = 0;
-
 /**
  * Iterate through dmin to dmax, calling callback and putting the result in an array.
  * @param {int} dmin start iteration at 
@@ -180,62 +180,85 @@ function cbWalk(schema, d) {
 	return fmtTime(elapsed(start));
 }
 
-function testMem(schema, d) {
-	let start, rtime, wtime;
-	let testName = "octet";
-	let i = 0, count = 0;
-	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
-	let schemaTests = schema.tests[testName];
-	let write = schemaTests.write.bind(null, voc);
-	let dims = Math.pow(2, d);
-	let cbw = (pos) => {
-		write(pos, i);
-		++i;
-		++count;
+function loop(voc, read, write, dims, out) {
+	var start, rtime, wtime, i = 0, count = 0;
+	var pos = new Uint32Array(3);
+
+	start = time();
+	for(pos[0] = 0; pos[0] < dims; ++pos[0]) {
+		for(pos[1] = 0; pos[1] < dims; ++pos[1]) {
+			i = 0;
+			for(pos[2] = 0; pos[2] < dims; ++pos[2]) {
+				write(voc, pos, i);
+				++i;
+				++count;
+			}
+		}
 	}
-	let cbr = schemaTests.read.bind(null, voc);
-	let size = Math.pow(2, d - 1)/2;
-	// fudge for octet test
+	wtime = elapsed(start);
+
 	start = time();
-	loop3D(size, {y:fy, z:cbw});
-	wtime = fmtTime(elapsed(start));
-	start = time();
-	loop3D(size, {y:fy, z:cbr});
-	rtime = fmtTime(elapsed(start));
+	for(pos[0] = 0; pos[0] < dims; ++pos[0]) {
+		for(pos[1] = 0; pos[1] < dims; ++pos[1]) {
+			for(pos[2] = 0; pos[2] < dims; ++pos[2]) {
+				read(voc, pos, out);
+			}
+		}
+	}
+	rtime = elapsed(start);
+	return {rtime, wtime, count};
+}
+
+function testMem(schema, d) {
+	var voc = new Voctopus(d, VoctopusSchemas[schema.name]);
+	var out = [
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel),
+		Object.create(voc.voxel)
+	];
+
+	var {rtime, wtime, count} = loop(voc, schema.tests.octet.read, schema.tests.octet.write, voc.dimensions/2, out);
+
 	// fudge for octet test
 	count *= 8;
-	return [d, dims, rtime, wtime, count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"];
+	return [d, voc.dimensions+"^3", fmtTime(rtime), fmtTime(wtime), count, calcOctets(voc), inMB(voc.view.byteLength)+"MB"];
 }
 
 function testRW(testName, schema, d) {
-	let start, rtime, wtime;
-	let i = 0, count = 0;
-	let voc = new Voctopus(d, VoctopusSchemas[schema.name]);
-	let schemaTests = schema.tests[testName];
-	let write = schemaTests.write.bind(null, voc);
-	let cbw = (pos) => {
-		write(pos, i);
-		++i;
-		++count;
-	}
-	let cbr = schemaTests.read.bind(null, voc);
-
+	var voc = new Voctopus(d, VoctopusSchemas[schema.name]);
+	var res = 1, dims, out;
 	// expand it first so it won't get slowed down arbitrarily
-	let res = 1;
 	while(res) res = voc.expand();
+	if(testName == "octet") {
+		dims = Math.ceil(voc.dimensions/2);
+		out = [
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel),
+			Object.create(voc.voxel)
+		];
+	}
+	else {
+		dims = voc.dimensions;
+		out = Object.create(voc.voxel);
+	}
+	var {rtime, wtime, count} = loop(voc, schema.tests[testName].read, schema.tests[testName].write, dims, out);
 
-	let size = Math.pow(2, d - 1);
 	// fudge for octet test
-	if(testName == "octet") size /= 2;
-	start = time();
-	loop3D(size, {y:fy, z:cbw});
-	wtime = elapsed(start);
-	start = time();
-	loop3D(size, {y:fy, z:cbr});
-	rtime = elapsed(start);
-	// fudge for octet test
-	if(testName == "octet") count *= 8;
-	return [testName, fmtTime(rtime), fmtTime(wtime), Math.round((1/rtime)*count), Math.round((1/wtime)*count), count, calcOctets(voc)];
+	if(testName == "octet") {
+		count *= 8;
+		dims *= 2;
+	}
+	return [testName, fmtTime(rtime), fmtTime(wtime), Math.round((1/rtime)*count), Math.round((1/wtime)*count), dims+"^3", count];
 }
 
 function benchmark(schema) {
@@ -257,13 +280,10 @@ function benchmark(schema) {
 	// Read/Write Benchmarks 
 	console.log("\nR/W Tests\n---------");
 	rows = [];
-	rows.push(["Type", "Read", "Write", "R/s", "W/s", "Voxels", "Octets"]);
+	rows.push(["Type", "Read", "Write", "R/s", "W/s", "Dims", "Voxels"]);
 	rows.push(divider(cellw, ["r","r","r","r","r","r","r"]));
 	testList.forEach((testName) => {
-		//rows.push(["*"+testName+"*"].concat(new Array(5).fill((" ").repeat(cellw))));
-		//for(let max = depth; d <= max; ++d) {
-			rows.push(testRW(testName, schema, depth));
-		//}
+		rows.push(testRW(testName, schema, depth));
 	});
 	console.log(table(cellw, rows));
 
