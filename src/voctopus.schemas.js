@@ -1,5 +1,5 @@
 "use strict";
-require("./voctopus.util.js");
+require("./voctopus.util");
 /**
 Voctopus Schemas
 ================
