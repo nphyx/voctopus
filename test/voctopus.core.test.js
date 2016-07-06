@@ -251,11 +251,13 @@ describe("Voctopus", function() {
 	});
 	it("should get and set voxels", function() {
 		voc = new Voctopus(3, schema);
-		var i = 0, count = 0, fy = () => i = 0;
+		var i = 0, count = 0, fy = () => i = 0, out = Object.create(voc.voxel);
 		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => {
 				voc.setVoxel(pos, {m:count});
 				voc.getVoxel(pos).should.eql({m:count}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+(count));
+				// using out param
+				voc.getVoxel(pos, out).should.eql({m:count}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+(count));
 				if(count < 254) count++;
 				else count = 0;
 			}
@@ -270,5 +272,18 @@ describe("Voctopus", function() {
 		for(let i = 0; i < 8; ++i) {
 			dv.getUint8(index+4+voc.octantSize*i).should.eql(i);
 		}
+		voc.getOctet(vec).should.eql(data);
+	});
+	it("compute ray intersections", function() {
+		let data = [{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1}];	
+		let cb = function(t, p) {
+			console.log(t);
+			console.log(p);
+			return 1;
+		}
+		voc.setOctet([0,0,0], data, 0);
+		//voc.intersect([16,16,-32], [16,16,512], cb);
+		//voc.intersect([16,16,-16], [0.0,0.0,1.0], cb);
+		voc.intersect([16,16,-16], [0.0622573, 0.0622573, 0.996116], cb);
 	});
 });
