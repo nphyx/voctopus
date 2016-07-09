@@ -13,6 +13,15 @@ gulp.task("default", function(cb) {
 	});
 });
 
+gulp.task("kernel", function(cb) {
+	exec("browserify -t babelify src/voctopus.kernel.asm.js > dist/voctopus.kernel.js", function(err, stdout, stderr) {
+		console.log(stderr);
+		console.log(stdout);
+		cb(err);
+	});
+});
+
+
 gulp.task("doc", function (cb) {
 	exec("jsdox --templateDir docs/templates --output docs src/*.js", function(err, stdout, stderr) {
 		console.log(stderr);
@@ -61,6 +70,16 @@ gulp.task("test:util", function() {
 
 gulp.task("test:schema", function() {
 	return gulp.src(["test/voctopus.schema.test.js"])
+	.pipe(mocha({
+		bail:true,
+		compilers: {
+			js: babelRegister
+		}
+	}))
+});
+
+gulp.task("test:kernel", function() {
+	return gulp.src(["test/voctopus.kernel.asm.test.js"])
 	.pipe(mocha({
 		bail:true,
 		compilers: {

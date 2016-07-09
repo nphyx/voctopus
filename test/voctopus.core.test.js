@@ -1,146 +1,137 @@
 "use strict";
 require("should");
+const {VoctopusKernel, VK_FO, VK_OS} = require("../src/voctopus.kernel.asm.js");
 const Voctopus = require("../src/voctopus.core").Voctopus;
 const {loop3D, npot, sump8} = require("../src/voctopus.util.js");
+const max = Math.max;
 
 describe("Voctopus", function() {
 	var d, voc;
-	// we haven't tested schemas yet so let's make a stub
-	var schema = [
-		{label:"p",type:{get:DataView.prototype.getUint32, set:DataView.prototype.setUint32,length:4}},
-		{label:"m",type:{get:DataView.prototype.getUint8, set:DataView.prototype.setUint8,length:1}},
-	];
+	const fo = VK_FO, os = VK_OS;
 	beforeEach("set up a clean voctopus instance", function() {
 		d = 5;
-		voc = new Voctopus(d, schema);
+		voc = new Voctopus(d);
 	});
 	it("should expose expected interfaces", function() {
 		voc.should.have.property("freedOctets");
-		voc.should.have.property("nextOctet");
+		voc.should.have.property("nextOffset");
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
 		voc.should.have.property("maxSize");
 		//voc.should.have.property("fields").eql(["m"]);
-		(typeof(voc.get)).should.equal("function", "method get implemented");
-		(typeof(voc.set)).should.equal("function", "method set implemented");
-		(typeof(voc.getVoxel)).should.equal("function", "method getVoxel implemented");
-		(typeof(voc.setVoxel)).should.equal("function", "method setVoxel implemented");
-		(typeof(voc.allocateOctets)).should.equal("function", "method allocateOctets implemented");
-		(typeof(voc.init)).should.equal("function", "method init implemented");
-		(typeof(voc.walk)).should.equal("function", "method walk implemented");
-		(typeof(voc.expand)).should.equal("function", "method expand implemented");
-	});
-	it("should implement octant schemas", function() {
-		(voc.schema).should.eql(schema);
-		voc.octantSize.should.equal(5);
-		voc.octetSize.should.equal(40);
-		voc.nextOctet.should.equal(80);
+		(typeof(voc.get)).should.equal("function");
+		(typeof(voc.set)).should.equal("function");
+		(typeof(voc.getPointer)).should.equal("function");
+		(typeof(voc.setPointer)).should.equal("function");
+		(typeof(voc.getVoxel)).should.equal("function");
+		(typeof(voc.setVoxel)).should.equal("function");
+		(typeof(voc.allocateOctets)).should.equal("function");
+		(typeof(voc.init)).should.equal("function");
+		(typeof(voc.walk)).should.equal("function");
+		(typeof(voc.expand)).should.equal("function");
 	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
-		var voxSize = voc.octantSize;
 		for(let i = 1; i < 9; ++i) {
-			voc = new Voctopus(i, schema);
-			voc.maxSize.should.eql(npot(sump8(i)*voxSize));
+			voc = new Voctopus(i);
+			voc.maxSize.should.eql(npot(fo+sump8(i)));
 		}
 	});
 	it("should correctly calculate the octree's dimensions", function() {
-		for(var i = 1; i < 16; i++) {
-			var voc = new Voctopus(i, schema);
+		for(var i = 1; i < 12; i++) {
+			var voc = new Voctopus(i);
 			voc.dimensions.should.eql(Math.pow(2, i));
 		}
 	});
 	it("should initialize the root pointer to the correct offset", function() {
-		var dv = voc.view;
-		dv.getUint32(0).should.eql(40, "root octant's pointer is pointing at the right offset");
+		var buf = new Uint32Array(voc.buffer);
+		(buf[1]).should.eql(fo);
 	});
 	it("should correctly implement pointer getters and setters", function() {
-		// implemented?
-		voc.get.m.should.be.type("function");
-		voc.get.p.should.be.type("function");
-		voc.set.m.should.be.type("function");
-		voc.set.p.should.be.type("function");
-
-		voc.set.p(0, 40);
-		voc.get.p(0).should.eql(40);
-		voc.set.p(40, 80);
-		voc.get.p(40).should.eql(80);
+		voc.setPointer(fo, fo+os);
+		voc.getPointer(fo).should.eql(fo+os);
+		voc.setPointer(fo+os, fo+os*2);
+		voc.getPointer(fo+os).should.eql(fo+os*2);
 	});
 	it("should generate a buffer of the correct length", function() {
 		// should make a buffer of max size if the max size is less than 73*octantSize
-		let voc = new Voctopus(1, schema);
-		voc.buffer.byteLength.should.equal(64);
-		// anything larger than this should start out at a quarter of the max size
-		for(var i = 2; i < 10; i++) {
-			voc = new Voctopus(i, schema);
-			voc.buffer.byteLength.should.eql(npot(voc.maxSize/8), "buffer is nearest power of two to one eighth of max length "+voc.maxSize);
+		let voc = new Voctopus(1);
+		voc.buffer.byteLength.should.equal(max(0x10000, npot(fo+os*8)));
+		voc = new Voctopus(2);
+		voc.buffer.byteLength.should.equal(max(0x10000, npot(fo+os*8)));
+		voc = new Voctopus(3);
+		voc.buffer.byteLength.should.equal(max(0x10000, npot(fo+os*8)));
+		// anything larger than this should start out at an eighth of the max size
+		for(var i = 4; i < 10; i++) {
+			voc = new Voctopus(i);
+			voc.buffer.byteLength.should.eql(npot(max(0x10000, voc.maxSize/8)), "buffer is nearest power of two to one eighth of max length "+voc.maxSize);
 		}
 	});
 	it("should expand the buffer using expand", function() {
 		var i, voc, ms;
-		for(i = 3; i < 8; i++) {
+		for(i = 4; i < 8; i++) {
 			voc = null;
-			voc = new Voctopus(i, schema);
+			voc = new Voctopus(i);
 			ms = voc.maxSize;
-			voc.buffer.byteLength.should.equal(npot(~~(ms/8)));
+			voc.buffer.byteLength.should.equal(npot(max(0x10000, ~~(ms/8))));
 			voc.expand();
-			voc.buffer.byteLength.should.equal(npot(~~(ms/4)));
+			voc.buffer.byteLength.should.equal(npot(max(0x10000, ~~(ms/4))));
 			voc.expand();
-			voc.buffer.byteLength.should.equal(npot(~~(ms/2)));
+			voc.buffer.byteLength.should.equal(npot(max(0x10000, ~~(ms/2))));
 			voc.expand();
-			voc.buffer.byteLength.should.equal(npot(ms));
+			voc.buffer.byteLength.should.equal(npot(max(0x10000, ~~(ms))));
 			voc.expand().should.be.false();
 		}
 	});
 	it("should initialize a coordinate's branch to a given depth with init", function() {
 		// use a smaller tree for these tests because it's less math to reason about
 		let vec = Float32Array.of(0,0,0);
-		let expected = [40, 80, 120, 160, 200];
+		let expected = [fo, fo+os, fo+os*2, fo+os*3, fo+os*4];
 		// one at a time
-		for(let i = 0; i < expected.length; ++i) {
+		for(let i = 0; i < 5; ++i) {
 			voc.init(vec, i).should.eql(expected[i]);
 		}
 		// now all at once
-		voc = new Voctopus(3, schema);
-		voc.init(vec).should.eql(120);
+		voc = new Voctopus(3);
+		voc.init(vec).should.eql(fo+os*3);
 
 		vec[0] = 1.0;
-		voc.init(vec).should.eql(125);
-		voc.init(vec).should.eql(125);
+		voc.init(vec).should.eql(fo+os*4);
+		voc.init(vec).should.eql(fo+os*4);
 
 		// check each depth level change
 		vec[0] = 2.0;
-		voc.init(vec).should.eql(160);
-		voc.init(vec).should.eql(160);
+		voc.init(vec).should.eql(fo+os*6);
+		voc.init(vec).should.eql(fo+os*6);
 
 		vec[0] = 4.0;
-		voc.init(vec).should.eql(240);
-		voc.init(vec).should.eql(240);
+		voc.init(vec).should.eql(fo+os*9);
+		voc.init(vec).should.eql(fo+os*9);
 
 		vec[1] = 1.0;
-		voc.init(vec).should.eql(250);
-		voc.init(vec).should.eql(250);
+		voc.init(vec).should.eql(fo+os*10);
+		voc.init(vec).should.eql(fo+os*10);
 
 		vec[1] = 2.0;
-		voc.init(vec).should.eql(280);
-		voc.init(vec).should.eql(280);
+		voc.init(vec).should.eql(fo+os*12);
+		voc.init(vec).should.eql(fo+os*12);
 
 		vec[1] = 4.0;
-		voc.init(vec).should.eql(360);
-		voc.init(vec).should.eql(360);
+		voc.init(vec).should.eql(fo+os*15);
+		voc.init(vec).should.eql(fo+os*15);
 
 		vec[2] = 2.0;
-		voc.init(vec).should.eql(400);
-		voc.init(vec).should.eql(400);
+		voc.init(vec).should.eql(fo+os*17);
+		voc.init(vec).should.eql(fo+os*17);
 
 		vec[2] = 4.0;
-		voc.init(vec).should.eql(480);
-		voc.init(vec).should.eql(480);
+		voc.init(vec).should.eql(fo+os*20);
+		voc.init(vec).should.eql(fo+os*20);
 
 		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
-		voc.init(vec).should.eql(575);
-		voc.init(vec).should.eql(575);
+		voc.init(vec).should.eql(fo+os*23);
+		voc.init(vec).should.eql(fo+os*23);
 
-		voc = new Voctopus(5, schema);
+		voc = new Voctopus(5);
 		loop3D(16, {x:(pos) => {
 			let posb = Array.prototype.slice.call(pos);
 			let vec = [];
@@ -151,14 +142,14 @@ describe("Voctopus", function() {
 				vec[0] = posb[0]+parseInt(str.charAt(2));
 				vec[1] = posb[1]+parseInt(str.charAt(1));
 				vec[2] = posb[2]+parseInt(str.charAt(0));
-				voc.init(vec).should.eql(voc.nextOctet - 40 + voc.octantSize*i);
+				voc.init(vec).should.eql(voc.nextOffset - os);
 			}
 		}});
 	});
 	it("should maintain integrity of the buffer during an expansion", function() {
 		this.timeout(10000);
 		var i, voc, size, index, count = 0, a, b, da, db;
-		voc = new Voctopus(6, schema);
+		voc = new Voctopus(6);
 		loop3D(size, {
 			y:() => i = 0, z:(pos) => {
 				index = voc.setVoxel(pos, {m:i});
@@ -178,10 +169,10 @@ describe("Voctopus", function() {
 	});
 	it("should walk the octree, returning an array of pointers", function() {
 		// use a smaller tree for these tests because it's less math to reason about
-		voc = new Voctopus(3, schema);
+		voc = new Voctopus(2);
 		let vec = Float32Array.of(0,0,0);
-		voc.walk(vec).should.eql([40]);
-		let expected = [40, 80, 120];
+		voc.walk(vec).should.eql([fo]);
+		let expected = [fo, fo+os, fo+os*2];
 
 		// now all at once
 		voc.init(vec);
@@ -189,13 +180,13 @@ describe("Voctopus", function() {
 
 		vec[0] = 1.0;
 		voc.init(vec);
-		expected = [40, 80, 125];
+		expected = [fo, fo+os, fo+os*2];
 		voc.walk(vec).should.eql(expected);
 
 		// check each depth level change
 		vec[0] = 2.0;
 		voc.init(vec);
-		expected = [40, 85, 160];
+		expected = [fo, fo+os, fo+os*3];
 		voc.walk(vec).should.eql(expected);
 
 		vec[0] = 4.0;
