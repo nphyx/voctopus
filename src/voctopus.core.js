@@ -3,7 +3,7 @@
 /*jshint globalstrict:true */
 /*jshint latedef:nofunc */
 const {VoctopusKernel, VK_FO} = require("./voctopus.kernel.asm.js");
-const {sump8, octantOffset, npot, rayAABB} = require("../src/voctopus.util");
+const {sump8, npot} = require("../src/voctopus.util");
 const MAX_BUFFER = 1024*1024*1024*512;
 const create = Object.create;
 const voxel = {
@@ -34,7 +34,7 @@ const voxel = {
 * @param {Array} schema data
 * @return {Voctopus}
 */
-function Voctopus(depth) {
+export function Voctopus(depth) {
 	if(!depth) throw new Error("Voctopus#constructor must be given a depth");
 	var buffer, view, octantSize, octetSize, firstOffset, startSize, maxSize, dimensions, kernel;
 
@@ -66,11 +66,11 @@ function Voctopus(depth) {
 		"octetSize":{get: () => octetSize},
 		"octantSize":{get: () => octantSize},
 		"freedOctets":{value: [], enumerable: false},	
-		"nextOffset":{get: () => kernel.getNextOffset(), set: (v) => kernel.setNextOffset(v), enumerable: false},
+		"nextOffset":{get: () => kernel.getNextOffset()},
 		"firstOffset":{get: () => firstOffset},
 		"depth":{get: () => depth},
-		"buffer":{get: () => buffer, set: (x) => buffer = x},
-		"view":{get: () => view, set: (x) => view = x},
+		"buffer":{get: () => buffer},
+		"view":{get: () => view},
 		"maxSize":{get: () => maxSize},
 		"dimensions":{get: () => dimensions},
 		"voxel":{get: () => voxel}
@@ -85,14 +85,6 @@ function Voctopus(depth) {
 	* be as expensive).
 	*/
 	startSize = npot(Math.max(0x10000, Math.min(maxSize/8, MAX_BUFFER)));
-	try {
-		// start with a 1mb buffer
-		this.buffer = new ArrayBuffer(startSize);
-		this.buffer.version = 0;
-	}
-	catch(e) {
-		throw new Error("Tried to initialize a Voctopus buffer at depth "+this.depth+", but "+startSize+" bytes was too large");
-	}
 
 	// initialize the kernel
 	buffer = new ArrayBuffer(startSize);
@@ -164,11 +156,6 @@ function Voctopus(depth) {
 
 	this.setPointer = function(index, pointer) {
 		kernel.setP(index, pointer);
-	}
-
-
-	this.allocateOctet = function() {
-		return kernel.allocateOctet();
 	}
 
 	/**
@@ -316,28 +303,6 @@ function Voctopus(depth) {
 	return this;
 }
 
-
-
-/**
-* Returns the next available unused octet position, calling Voctopus#expand
-* if it needs to create more space.
-* @param {int} count number of octets to allocate (default 1)
-* @return {array} array of new pointers
-*/
-Voctopus.prototype.allocateOctets = function(count = 1) {
-	if(this.freedOctets.length > 0) return this.freedOctets.splice(0, count);
-	let pointers = new Array(count), i = 0; 
-	let next = this.nextOctet, size = this.octetSize;
-	if(next+size*count > this.buffer.byteLength) this.expand();
-	for(; i < count; ++i) {
-		pointers[i] = next+size*i;
-	}
-	this.nextOctet = pointers[count-1]+size;
-	return pointers;
-}
-
-
-
 /**
 * Cast a ray into the octree, computing intersections along the path.
 * The accumulator function should be in the form `f(t, p) => bool`, where t is distance
@@ -356,32 +321,29 @@ Voctopus.prototype.allocateOctets = function(count = 1) {
 * var dist = 0;
 * var index = 0;
 * var cb = function(t, p) {
-	* 	dist = t;
-	* 	index = p;
-	* 	return 1; // halt after first hit (you could return 0 to keep )
-	* }
-	* voc.cast(ro, rd, cb); // 1, because at least one voxel was hit
-	* p; // 40, pointer of the voxel at [0,0,0]
-	* t; // 
-	*/
-	Voctopus.prototype.intersect = function(ro, rd, f) {
-		// TODO: update these later on to support dynamic coordinates
-		let end = this.dimensions - 1;
-		let start = 0;
-		// decompose vectors, saves time referencing
-		let rdi = [1/rd[0], 1/rd[1], 1/rd[2]];
+* 	dist = t;
+* 	index = p;
+* 	return 1; // halt after first hit (you could return 0 to keep )
+* }
+* voc.cast(ro, rd, cb); // 1, because at least one voxel was hit
+* p; // 40, pointer of the voxel at [0,0,0]
+* t; // 
+*
+Voctopus.prototype.intersect = function(ro, rd) {
+	// TODO: update these later on to support dynamic coordinates
+	let end = this.dimensions - 1;
+	let start = 0;
+	// decompose vectors, saves time referencing
+	let rdi = [1/rd[0], 1/rd[1], 1/rd[2]];
 
-		// find out if ray intersects outer bounding box
-		if(rayAABB([start,start,start],[end,end,end], ro, rdi)) {
-			// find first octant of intersection
-		}
-
-		// descend
-		// if hit found, call accumulator
-		// if result is zero, repeat for neighbor
-		// return pointer
+	// find out if ray intersects outer bounding box
+	if(rayAABB([start,start,start],[end,end,end], ro, rdi)) {
+		// find first octant of intersection
 	}
 
-	if(typeof(module) !== "undefined") {
-		module.exports.Voctopus = Voctopus;
-	}
+	// descend
+	// if hit found, call accumulator
+	// if result is zero, repeat for neighbor
+	// return pointer
+}
+*/

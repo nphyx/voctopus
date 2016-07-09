@@ -19,6 +19,8 @@ describe("Voctopus", function() {
 		voc.should.have.property("buffer");
 		voc.should.have.property("depth");
 		voc.should.have.property("maxSize");
+		voc.should.have.property("octetSize");
+		voc.should.have.property("firstOffset");
 		//voc.should.have.property("fields").eql(["m"]);
 		(typeof(voc.get)).should.equal("function");
 		(typeof(voc.set)).should.equal("function");
@@ -26,10 +28,12 @@ describe("Voctopus", function() {
 		(typeof(voc.setPointer)).should.equal("function");
 		(typeof(voc.getVoxel)).should.equal("function");
 		(typeof(voc.setVoxel)).should.equal("function");
-		(typeof(voc.allocateOctets)).should.equal("function");
 		(typeof(voc.init)).should.equal("function");
 		(typeof(voc.walk)).should.equal("function");
 		(typeof(voc.expand)).should.equal("function");
+	});
+	it("should complain if not supplied with a depth", function() {
+		(() => new Voctopus()).should.throwError();
 	});
 	it("should correctly calculate the maximum size for a Voctopus", function() {
 		for(let i = 1; i < 9; ++i) {

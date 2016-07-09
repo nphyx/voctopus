@@ -1,7 +1,7 @@
 "use strict";
 /**
- * This module contains an assortment of functions used internally in Voctopus, as well
- * as some functions for analyzing octree properties for experimental purposes (they
+ * This module contains an assortment of export functions used internally in Voctopus, as well
+ * as some export functions for analyzing octree properties for experimental purposes (they
  * help find "sweet spots" for initial octree memory allocations)
  * @module voctopus/util
  */
@@ -11,14 +11,14 @@
  * causes two reads/writes per call, meaning it's going to be
  * around half as fast as the native implementations.
  */
-DataView.prototype.getUint24 = function(pos) {
+DataView.prototype.getUint24 =  function(pos) {
 	return (this.getUint16(pos) << 8) + this.getUint8(pos+2);
 }
 
 /**
  * Setter for Uint24.
  */
-DataView.prototype.setUint24 = function(pos, val) {
+DataView.prototype.setUint24 =  function(pos, val) {
 	this.setUint16(pos, val >> 8);
 	this.setUint8(pos+2, val & ~4294967040);
 }
@@ -28,7 +28,7 @@ DataView.prototype.setUint24 = function(pos, val) {
  * @param {int} n highest power of 8, up to 24 (after which precision errors become a problem)
  * @return {Float64}
  */
-function sump8(n) {
+export function sump8(n) {
 	return (Math.pow(8, n+1) -1) / 7;
 }
 
@@ -40,7 +40,7 @@ function sump8(n) {
  * @param {int} dm maximum depth
  * @return {int} identity
  */
-function octantIdentity(v, dc, dm) {
+export function octantIdentity(v, dc, dm) {
 	let d = dm - 1 - dc;
 	return (((v[2] >>> d) & 1) << 2 | 
 					((v[1] >>> d) & 1) << 1 |
@@ -49,24 +49,12 @@ function octantIdentity(v, dc, dm) {
 }
 
 /**
- * Find the offset of an octant.
- * @param {vector} vector representing the absolute coordinate of a voxel at max depth 
- * @param {int} dc current depth (zero-indexed)
- * @param {int} dm maximum depth
- * @param {int} os octant size
- * @return {int} offset
- */
-function octantOffset(v, dc, dm, os) {
-	return octantIdentity(v, dc, dm)*os;
-}
-
-/**
  * Figures out the maximum size of a voctopus octree, assuming it's 100% dense (e.g. filled with random noise).
  * @param {int} octantSize size of a single octant in the tree
  * @param {int} depth octree depth
  * @return {int}
  */
-function fullOctreeSize(octantSize, depth) {
+export function fullOctreeSize(octantSize, depth) {
 	return sump8(depth)*octantSize;
 }
 
@@ -77,7 +65,7 @@ function fullOctreeSize(octantSize, depth) {
  * @param {int} octantSize (in bytes)
  * @return {int} depth
  */
-function maxAddressableOctreeDepth(octantSize) {
+export function maxAddressableOctreeDepth(octantSize) {
 	var sum = 0, depth = 1;
 	while(((sum+1)-(sum) === 1)) {
 		++depth;
@@ -92,7 +80,7 @@ function maxAddressableOctreeDepth(octantSize) {
  * @param {int} depth octree depth
  * @param {int} limit memory limit in bytes
  */
-function maxOctreeDensityFactor(octantSize, depth, limit) {
+export function maxOctreeDensityFactor(octantSize, depth, limit) {
 	return ~~(fullOctreeSize(octantSize, depth)/limit+1);
 }
 
@@ -101,7 +89,7 @@ function maxOctreeDensityFactor(octantSize, depth, limit) {
  * @param {int} n number to test against
  * @return {int}
  */
-function npot(n) {
+export function npot(n) {
 	n--;
 	n |= n >> 1;
 	n |= n >> 2;
@@ -121,7 +109,7 @@ function npot(n) {
  * @param {Object} cbs callback object {x:f(vector),y:f(vector),z:f(vector)}
  * @return {undefined}
  */
-function loop3D(size, cbs) {
+export function loop3D(size, cbs) {
 	var cbx, cby, cbz, v = Uint32Array.of(0,0,0);
 	cbx = typeof(cbs.x) === "function"?cbs.x:function(){};
 	cby = typeof(cbs.y) === "function"?cbs.y:function(){};
@@ -144,20 +132,8 @@ function loop3D(size, cbs) {
  * Find the coordinate space (size of a single octree axis) for a given depth.
  * @param {int} depth octree depth
  */
-function coordinateSpace(depth) {
+export function coordinateSpace(depth) {
 	return Math.pow(2, depth);
-}
-
-function getterFactory(fn, view, o) {
-	return function(i) {
-		return fn.call(view, i+o);
-	}
-}
-
-function setterFactory(fn, view, o) {
-	return function(i, v) {
-		return fn.call(view, i+o, v);
-	}
 }
 
 /**
@@ -168,7 +144,7 @@ function setterFactory(fn, view, o) {
  * @param {vector} rd inverse of ray direction (inverse should be precalculated)
  * @return bool true if there was a hit, otherwise false
  */
-function rayAABB(bs, be, ro, rd) {
+export function rayAABB(bs, be, ro, rd) {
 	let min = Math.min, max = Math.max;
 	// decompose vectors, saves time referencing
 	// ray origin
@@ -200,7 +176,7 @@ function rayAABB(bs, be, ro, rd) {
  * @return {undefined}
  */
 if(typeof(ArrayBuffer.prototype.transfer) === "undefined") {
-	ArrayBuffer.prototype.transfer = function transfer(old) {
+	ArrayBuffer.prototype.transfer =  function transfer(old) {
 		var dva, dvb, i, mod;
 		dva = new DataView(this);
 		dvb = new DataView(old);
@@ -221,7 +197,7 @@ if(typeof(ArrayBuffer.prototype.transfer) === "undefined") {
 }
 
 // memory mapping utility for debugging
-const mmap = function(start, end, v) {
+export function mmap(start, end, v) {
 	const pad = (n) => "0".repeat(4).slice(0, 4-n.toString().length)+n;
 	for(let i = start; i < end; i+=8) {
 		console.log([i, i+1, i+2, i+3, i+4, i+5, i+6, i+7].map(pad).join(" "));
@@ -230,17 +206,3 @@ const mmap = function(start, end, v) {
 	}
 }
 
-module.exports.sump8 = sump8;
-module.exports.DataView = DataView;
-module.exports.fullOctreeSize = fullOctreeSize;
-module.exports.maxAddressableOctreeDepth = maxAddressableOctreeDepth;
-module.exports.coordinateSpace = coordinateSpace;
-module.exports.maxOctreeDensityFactor = maxOctreeDensityFactor;
-module.exports.octantIdentity = octantIdentity;
-module.exports.octantOffset = octantOffset;
-module.exports.npot = npot;
-module.exports.loop3D = loop3D;
-module.exports.getterFactory = getterFactory;
-module.exports.setterFactory = setterFactory;
-module.exports.rayAABB = rayAABB;
-module.exports.mmap = mmap;
