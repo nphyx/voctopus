@@ -385,6 +385,16 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 	}
 
 	/**
+	 * Single step in traversal. Used when walking the tree.
+	 */
+	function step() {
+		incrementCurrentDepth();
+		heap32[STEPA>>2] = getOctant(octantPointer()|0)|0;
+		heap32[P_CUR>>2] = pFrom(heap32[STEPA>>2]|0)|0;
+		return (octantPointer()|0)|0;
+	}
+
+	/**
 	 * Check the ray - box intersection of a voxel (which is an axis-aligned bounding box)
 	 * @param {double} bs[x,y,z] box start (top, left, back) 
 	 * @param {double} be[x,y,z] box end (bottom, right, front)
@@ -459,6 +469,7 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 		octantIdentity:octantIdentity,
 		octantPointer:octantPointer,
 		traverse:traverse,
+		step:step,
 		rayAABB:rayAABB
 	};
 }

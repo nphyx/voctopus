@@ -220,6 +220,16 @@ if(typeof(ArrayBuffer.prototype.transfer) === "undefined") {
 	}
 }
 
+// memory mapping utility for debugging
+const mmap = function(start, end, v) {
+	const pad = (n) => "0".repeat(4).slice(0, 4-n.toString().length)+n;
+	for(let i = start; i < end; i+=8) {
+		console.log([i, i+1, i+2, i+3, i+4, i+5, i+6, i+7].map(pad).join(" "));
+		console.log([v[i], v[i+1], v[i+2], v[i+3], v[i+4], v[i+5], v[i+6], v[i+7]].map(pad).join(" "));
+		console.log("");
+	}
+}
+
 module.exports.sump8 = sump8;
 module.exports.DataView = DataView;
 module.exports.fullOctreeSize = fullOctreeSize;
@@ -233,3 +243,4 @@ module.exports.loop3D = loop3D;
 module.exports.getterFactory = getterFactory;
 module.exports.setterFactory = setterFactory;
 module.exports.rayAABB = rayAABB;
+module.exports.mmap = mmap;

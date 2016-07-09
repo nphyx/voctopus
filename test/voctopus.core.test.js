@@ -1,9 +1,10 @@
 "use strict";
 require("should");
-const {VoctopusKernel, VK_FO, VK_OS} = require("../src/voctopus.kernel.asm.js");
+const {VK_FO, VK_OS} = require("../src/voctopus.kernel.asm.js");
 const Voctopus = require("../src/voctopus.core").Voctopus;
 const {loop3D, npot, sump8} = require("../src/voctopus.util.js");
 const max = Math.max;
+
 
 describe("Voctopus", function() {
 	var d, voc;
@@ -82,70 +83,6 @@ describe("Voctopus", function() {
 			voc.expand().should.be.false();
 		}
 	});
-	it("should initialize a coordinate's branch to a given depth with init", function() {
-		// use a smaller tree for these tests because it's less math to reason about
-		let vec = Float32Array.of(0,0,0);
-		let expected = [fo, fo+os, fo+os*2, fo+os*3, fo+os*4];
-		// one at a time
-		for(let i = 0; i < 5; ++i) {
-			voc.init(vec, i).should.eql(expected[i]);
-		}
-		// now all at once
-		voc = new Voctopus(3);
-		voc.init(vec).should.eql(fo+os*3);
-
-		vec[0] = 1.0;
-		voc.init(vec).should.eql(fo+os*4);
-		voc.init(vec).should.eql(fo+os*4);
-
-		// check each depth level change
-		vec[0] = 2.0;
-		voc.init(vec).should.eql(fo+os*6);
-		voc.init(vec).should.eql(fo+os*6);
-
-		vec[0] = 4.0;
-		voc.init(vec).should.eql(fo+os*9);
-		voc.init(vec).should.eql(fo+os*9);
-
-		vec[1] = 1.0;
-		voc.init(vec).should.eql(fo+os*10);
-		voc.init(vec).should.eql(fo+os*10);
-
-		vec[1] = 2.0;
-		voc.init(vec).should.eql(fo+os*12);
-		voc.init(vec).should.eql(fo+os*12);
-
-		vec[1] = 4.0;
-		voc.init(vec).should.eql(fo+os*15);
-		voc.init(vec).should.eql(fo+os*15);
-
-		vec[2] = 2.0;
-		voc.init(vec).should.eql(fo+os*17);
-		voc.init(vec).should.eql(fo+os*17);
-
-		vec[2] = 4.0;
-		voc.init(vec).should.eql(fo+os*20);
-		voc.init(vec).should.eql(fo+os*20);
-
-		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
-		voc.init(vec).should.eql(fo+os*23);
-		voc.init(vec).should.eql(fo+os*23);
-
-		voc = new Voctopus(5);
-		loop3D(16, {x:(pos) => {
-			let posb = Array.prototype.slice.call(pos);
-			let vec = [];
-			for(let i in posb) posb[i] *= 2;
-			for(let i = 0; i < 8; ++i) {
-				// this is slow and dumb but it's easy to understand and just a test!
-				let str = (("0").repeat(3)+(i >>> 0).toString(2)).slice(-3);
-				vec[0] = posb[0]+parseInt(str.charAt(2));
-				vec[1] = posb[1]+parseInt(str.charAt(1));
-				vec[2] = posb[2]+parseInt(str.charAt(0));
-				voc.init(vec).should.eql(voc.nextOffset - os);
-			}
-		}});
-	});
 	it("should maintain integrity of the buffer during an expansion", function() {
 		this.timeout(10000);
 		var i, voc, size, index, count = 0, a, b, da, db;
@@ -167,12 +104,78 @@ describe("Voctopus", function() {
 			da.getUint8(i).should.eql(db.getUint8(i));
 		}
 	});
+	it("should initialize a coordinate's branch to a given depth with init", function() {
+		// use a smaller tree for these tests because it's less math to reason about
+		let vec = Float32Array.of(0,0,0);
+		let expected = [fo, fo+os, fo+os*2, fo+os*3, fo+os*4];
+		// one at a time
+		for(let i = 0; i < 5; ++i) {
+			voc.init(vec, i).should.eql(expected[i]);
+		}
+		// now all at once
+		voc = new Voctopus(4);
+		voc.init(vec).should.eql(fo+os*3);
+
+		// each of these are run twice to prove that it's deterministic,
+		// and not just allocating a new one every time
+		vec[0] = 1.0;
+		voc.init(vec).should.eql(fo+os*4);
+		voc.init(vec).should.eql(fo+os*4);
+
+		// check each depth level change
+		vec[0] = 2.0;
+		voc.init(vec).should.eql(fo+os*6);
+		voc.init(vec).should.eql(fo+os*6);
+
+		vec[0] = 4.0;
+		voc.init(vec).should.eql(fo+os*9);
+		voc.init(vec).should.eql(fo+os*9);
+
+		vec[1] = 1.0;
+		voc.init(vec).should.eql(fo+os*10);
+		voc.init(vec).should.eql(fo+os*10);
+
+		vec[1] = 2.0;
+		voc.init(vec).should.eql(fo+os*12);
+		voc.init(vec).should.eql(fo+os*12);
+
+		vec[1] = 4.0;
+		voc.init(vec).should.eql(fo+os*15);
+		voc.init(vec).should.eql(fo+os*15);
+
+		vec[2] = 2.0;
+		voc.init(vec).should.eql(fo+os*17);
+		voc.init(vec).should.eql(fo+os*17);
+
+		vec[2] = 4.0;
+		voc.init(vec).should.eql(fo+os*20);
+		voc.init(vec).should.eql(fo+os*20);
+
+		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
+		voc.init(vec).should.eql(fo+os*23);
+		voc.init(vec).should.eql(fo+os*23);
+
+		voc = new Voctopus(6);
+		loop3D(16, {x:(pos) => {
+			let posb = Array.prototype.slice.call(pos);
+			let vec = [];
+			for(let i in posb) posb[i] *= 2;
+			for(let i = 0; i < 8; ++i) {
+				// this is slow and dumb but it's easy to understand and just a test!
+				let str = (("0").repeat(3)+(i >>> 0).toString(2)).slice(-3);
+				vec[0] = posb[0]+parseInt(str.charAt(2));
+				vec[1] = posb[1]+parseInt(str.charAt(1));
+				vec[2] = posb[2]+parseInt(str.charAt(0));
+				voc.init(vec).should.eql(voc.nextOffset - os);
+			}
+		}});
+	});
 	it("should walk the octree, returning an array of pointers", function() {
 		// use a smaller tree for these tests because it's less math to reason about
-		voc = new Voctopus(2);
+		voc = new Voctopus(4);
 		let vec = Float32Array.of(0,0,0);
 		voc.walk(vec).should.eql([fo]);
-		let expected = [fo, fo+os, fo+os*2];
+		let expected = [fo, fo+os, fo+os*2, fo+os*3];
 
 		// now all at once
 		voc.init(vec);
@@ -180,92 +183,107 @@ describe("Voctopus", function() {
 
 		vec[0] = 1.0;
 		voc.init(vec);
-		expected = [fo, fo+os, fo+os*2];
+		expected = [fo, fo+os, fo+os*2, fo+os*4+1];
 		voc.walk(vec).should.eql(expected);
 
 		// check each depth level change
 		vec[0] = 2.0;
 		voc.init(vec);
-		expected = [fo, fo+os, fo+os*3];
+		expected = [fo, fo+os, fo+os*5+1, fo+os*6];
 		voc.walk(vec).should.eql(expected);
 
 		vec[0] = 4.0;
 		voc.init(vec);
-		expected = [45, 200, 240];
+		expected = [fo, fo+os*7+1, fo+os*8, fo+os*9];
 		voc.walk(vec).should.eql(expected);
 
 		vec[1] = 1.0;
 		voc.init(vec);
-		expected = [45, 200, 250];
+		expected = [fo, fo+os*7+1, fo+os*8, fo+os*10+2];
 		voc.walk(vec).should.eql(expected);
 
 		vec[1] = 2.0;
 		voc.init(vec);
-		expected = [45, 210, 280];
+		expected = [fo, fo+os*7+1, fo+os*11+2, fo+os*12];
 		voc.walk(vec).should.eql(expected);
 
 		vec[1] = 4.0;
 		voc.init(vec);
-		expected = [55, 320, 360];
+		expected = [fo, fo+os*13+3, fo+os*14, fo+os*15];
 		voc.walk(vec).should.eql(expected);
 
 		vec[2] = 2.0;
 		voc.init(vec);
-		expected = [55, 340, 400];
+		expected = [fo, fo+os*13+3, fo+os*16+4, fo+os*17];
 		voc.walk(vec).should.eql(expected);
 
 		vec[2] = 4.0;
 		voc.init(vec);
-		expected = [75, 440, 480];
+		expected = [fo, fo+os*18+7, fo+os*19, fo+os*20];
 		voc.walk(vec).should.eql(expected);
 
 		vec[0] = 3.0; vec[1] = 7.0; vec[2] = 4.0;
 		voc.init(vec);
-		expected = [70, 535, 575];
+		expected = [fo, fo+os*21+6, fo+os*22+3, fo+os*23+3];
 		voc.walk(vec).should.eql(expected);
 	});
 	it("should set voxel data at the right position with setVoxel", function() {
-		var dv = voc.view;
+		let vec = [0,0,0];
+		let rgba = {r:128, g:222, b:235, a:15};
+		let ptr = (fo+os*4)<<2;
+		let v = voc.view;
 		// this should make a tree going down to 0,0
-		voc.setVoxel([0,0,0], {m:16});
+		voc.setVoxel(vec, rgba);
 		// look at the raw data, since we haven't yet tested getVoxel
-		dv.getUint32(0).should.eql(40, "octant's pointer at depth 1 is pointing at the right offset");
-		dv.getUint32(40).should.eql(80, "octant's pointer at depth 2 is pointing at the right offset");
-		dv.getUint32(80).should.eql(120, "octant's pointer at depth 3 is pointing at the right offset");
-		dv.getUint32(120).should.eql(160, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint32(160).should.eql(200, "octant's pointer at depth 4 is pointing at the right offset");
-		dv.getUint32(200).should.eql(0, "voxel's pointer value is correct");
-		dv.getUint8(204).should.eql(16, "voxel's material value is correct");
+		let stack = voc.walk(vec, 4);
+		stack.should.eql([fo, fo+os, fo+os*2, fo+os*3, fo+os*4]);
+		v[ptr+3].should.eql(rgba.r, "voxel's r value is correct");
+		v[ptr+2].should.eql(rgba.g, "voxel's r value is correct");
+		v[ptr+1].should.eql(rgba.b, "voxel's r value is correct");
+		(v[ptr]).should.eql((15<<4), "voxel's r value is correct");
 
-		voc.setVoxel([1,0,0], {m:12});
-		dv.getUint8(209).should.eql(12, "voxel's material value is correct");
+		vec[0] = 1;
+		rgba.r = 223;
+		rgba.g = 108;
+		rgba.b = 115;
+		rgba.a = 12;
+
+		voc.setVoxel(vec, rgba);
+		ptr = (fo+os*5)<<2;
+		v[ptr+3].should.eql(rgba.r, "voxel's r value is correct");
+		v[ptr+2].should.eql(rgba.g, "voxel's r value is correct");
+		v[ptr+1].should.eql(rgba.b, "voxel's r value is correct");
+		(v[ptr]).should.eql((12<<4), "voxel's r value is correct");
 	});
 	it("should get and set voxels", function() {
-		voc = new Voctopus(3, schema);
-		var i = 0, count = 0, fy = () => i = 0, out = Object.create(voc.voxel);
+		voc = new Voctopus(3);
+		var rgba = Object.create(voc.voxel);
+		const cv = (c, n) => (c>>2)+n;
+		var i = 0, c = 0, fy = () => i = 0, out = Object.create(voc.voxel);
 		loop3D(voc.dimensions, {
 			y:fy, z:(pos) => {
-				voc.setVoxel(pos, {m:count});
-				voc.getVoxel(pos).should.eql({m:count}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+(count));
+				rgba.r = cv(c,0); rgba.g = cv(c,1); rgba.b = cv(c,2); rgba.a = 15;
+				voc.setVoxel(pos, rgba);
+				voc.getVoxel(pos).should.eql(rgba);
 				// using out param
-				voc.getVoxel(pos, out).should.eql({m:count}, "expected voc at "+pos[0]+","+pos[1]+","+pos[2]+" m="+(count));
-				if(count < 254) count++;
-				else count = 0;
+				voc.getVoxel(pos, out).should.eql(rgba);
+				if(c < 254) c++;
+				else c = 0;
 			}
 		});
 	});
 	it("should write a full octet in one pass", function() {
-		var dv = voc.view;
 		var vec = Uint32Array.of(0,0,0);
-		let index = voc.init(vec);
-		let data = [{m:0},{m:1},{m:2},{m:3},{m:4},{m:5},{m:6},{m:7}];
-		voc.setOctet(vec, data);
-		for(let i = 0; i < 8; ++i) {
-			dv.getUint8(index+4+voc.octantSize*i).should.eql(i);
+		var data = [];
+		const rc = () => ~~(Math.random()*255);
+		const ra = () => ~~(Math.random()*15);
+		for(let i = 0; i < 8; i++) {
+			data.push({r:rc(),g:rc(),b:rc(),a:ra()});
 		}
+		voc.setOctet(vec, data);
 		voc.getOctet(vec).should.eql(data);
 	});
-	it("compute ray intersections", function() {
+	xit("compute ray intersections", function() {
 		let data = [{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1}];	
 		let cb = function(t, p) {
 			console.log(t);
