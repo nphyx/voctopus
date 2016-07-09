@@ -22,7 +22,7 @@ gulp.task("kernel", function(cb) {
 });
 
 
-gulp.task("doc", function (cb) {
+gulp.task("docs", function (cb) {
 	exec("jsdox --templateDir docs/templates --output docs src/*.js", function(err, stdout, stderr) {
 		console.log(stderr);
 		console.log(stdout);
@@ -32,6 +32,7 @@ gulp.task("doc", function (cb) {
 
 gulp.task("benchmark", function(cb) {
 	exec("browserify -t babelify src/voctopus.benchmark.js | uglifyjs > dist/voctopus.benchmark.js && node dist/voctopus.benchmark.js | tee docs/benchmark.md", function(err, stdout, stderr) {
+	//exec("browserify -t babelify src/voctopus.benchmark.js > dist/voctopus.benchmark.js && node dist/voctopus.benchmark.js | tee docs/benchmark.md", function(err, stdout, stderr) {
 		console.log(stderr);
 		console.log(stdout);
 		cb(err);
