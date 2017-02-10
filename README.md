@@ -12,7 +12,7 @@ Voctopus has two main pieces: a low-level kernel written in asm.js and a high-le
 
 Memory management, access, traversal, and other core operations are handled by the kernel, yielding real-world performance 
 of over one million (and up to 8 million) r/w operations per second on commodity hardware in a small memory footprint. See the 
-[benchmarks](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet) for performance details.
+[benchmarks](https://github.com/nphyx/voctopus/wiki/benchmark) for performance details.
 
 The kernel currently supports 32-bit voxels representing either a 31-bit subtree pointer or 24 bits of RGB color, a 4 bit alpha 
 channel, and 3 bits reserved for rendering instructions (the remaining bit is a flag indicating whether the entry is a pointer
