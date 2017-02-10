@@ -21,7 +21,6 @@ gulp.task("kernel", function(cb) {
 	});
 });
 
-
 gulp.task("docs", function (cb) {
 	exec("jsdox --templateDir docs/templates --output docs src/*.js", function(err, stdout, stderr) {
 		console.log(stderr);
