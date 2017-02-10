@@ -1,34 +1,34 @@
-Voctopus 0.0.1
+Voctopus 0.1.0
 ==============
-An experimental implementation of a sparse voxel octree in javascript. The basic
-data structure is here, but it still needs work before it's ready for production.
+Voctopus is a Javascript implementation of a sparse voxel octree. The end goal is to create a data structure small and fast 
+enough that it can be rendered directly by a shader in WebGL without meshification, using ray tracing techniques (or something
+analogous to that - I'm currently experimenting with a mix of ideas taken from cone tracing, path tracing and depth marching). 
+The shader code is still a work in progress, and will be released as a separate repository along with the rest of the tools
+necessary to create and manipulate scenes.
 
-The tree is stored in a flattened structure:
-```
-[00]
-|-`----------------------------.
-[01][02][03][04][05][06][07][08]
-|-`----------------------------.
-[09][10][11][12][13][14][15][16][...]
-|-`----------------------------.
-[73][74][75][76][77][79][80][81][...]
-```
+Architecture
+------------
+Voctopus has two main pieces: a low-level kernel written in asm.js and a high-level javascript API for use by humans.
 
-This lets it traverse using some nifty math (check the source if you want to know more, 
-the algorithm is somewhat documented). 
+Memory management, access, traversal, and other core operations are handled by the kernel, yielding real-world performance 
+of over one million (and up to 8 million) r/w operations per second on commodity hardware in a small memory footprint. See the 
+[benchmarks](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet) for performance details.
 
-It automatically prunes branches that are empty (which is the Sparse part of a SVO) but
-perhaps more interestingly it also prunes branches that are uniform (whose children are
-all identical).
+The kernel currently supports 32-bit voxels representing either a 31-bit subtree pointer or 24 bits of RGB color, a 4 bit alpha 
+channel, and 3 bits reserved for rendering instructions (the remaining bit is a flag indicating whether the entry is a pointer
+or voxel data). The non-kernel code is agnostic, such that kernels with other data structures (e.g. for indexed color) could
+be supported.
 
-Since Javascript Arrays are naturally sparse (empty elements don't take up any memory) 
-you can store a very large volume in a relatively small place and retrieve data quickly.
+Todo
+----
+* prune dead octets and free for reallocation - incomplete
+* defragmentation (maybe not neccessary)
+* ray intersection - partially complete, weird test results
 
-It can defer cleanup during a large transaction (updating multiple voxels) and will
-intelligently do the minimum amount of work it needs to to keep the tree up to date.
+Voctopus is still a work in progress! Neither the API nor the data structure should be considered stable.
 
-Combine all these features together and you get an octree that updates and traverses
-lightning fast. There are still a few rough spots that might have room for improvement.
+Current documentation is available in the [project wiki](https://github.com/nphyx/voctopus/wiki/voctopus.core). Examples and demos
+will follow as the code stabilizies - they're currently not in useful shape.
 
 License (MIT)
 =============

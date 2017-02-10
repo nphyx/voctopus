@@ -1,6 +1,6 @@
 {
   "name": "@nphyx/voctopus",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "repository": "https://github.com/nphyx/voctopus",
   "description": "An experimental implementation of Sparse Voxel Octrees in javascript.",
   "author": "Justen Robertson <nphyxx@gmail.com>",
