@@ -211,7 +211,7 @@ export function Voctopus(depth) {
 	*/
 	this.getVoxel = function(v, out = create(this.voxel), d = this.depth) {
 		kernel.prepareLookup(v[0], v[1], v[2], d);
-		return this.get(kernel.traverse());
+		return this.get(kernel.traverse(), out);
 	}
 
 	/**
