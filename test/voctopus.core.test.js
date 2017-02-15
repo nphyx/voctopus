@@ -1,7 +1,7 @@
 "use strict";
 require("should");
 const {VK_FO, VK_OS} = require("../src/voctopus.kernel.asm.js");
-const Voctopus = require("../src/voctopus.core").Voctopus;
+const {voxel, Voctopus} = require("../src/voctopus.core");
 const {loop3D, npot, sump8} = require("../src/voctopus.util.js");
 const max = Math.max;
 
@@ -282,7 +282,12 @@ describe("Voctopus", function() {
 		const rc = () => ~~(Math.random()*255);
 		const ra = () => ~~(Math.random()*15);
 		for(let i = 0; i < 8; i++) {
-			data.push({r:rc(),g:rc(),b:rc(),a:ra()});
+			let vx = Object.create(voxel);
+			vx.r = rc();
+			vx.g = rc();
+			vx.b = rc();
+			vx.a = ra();
+			data.push(vx);
 		}
 		voc.setOctet(vec, data);
 		voc.getOctet(vec).should.eql(data);

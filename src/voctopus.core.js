@@ -6,7 +6,7 @@ const {VoctopusKernel, VK_FO} = require("./voctopus.kernel.asm.js");
 const {sump8, npot} = require("../src/voctopus.util");
 const MAX_BUFFER = 1024*1024*1024*512;
 const create = Object.create;
-const voxel = {
+export const voxel = {
 	r:0,
 	g:0,
 	b:0,
