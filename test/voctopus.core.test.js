@@ -21,6 +21,7 @@ describe("Voctopus", function() {
 		voc.should.have.property("maxSize");
 		voc.should.have.property("octetSize");
 		voc.should.have.property("firstOffset");
+		voc.should.have.property("dimensions");
 		//voc.should.have.property("fields").eql(["m"]);
 		(typeof(voc.get)).should.equal("function");
 		(typeof(voc.set)).should.equal("function");
@@ -276,6 +277,62 @@ describe("Voctopus", function() {
 			}
 		});
 	});
+	it("should support the out parameter for getVoxel", function() {
+		voc = new Voctopus(3);
+		let vx = Object.create(voc.voxel);
+		let pos = [0,0,0];
+		vx.r = 255;
+		vx.g = 128;
+		vx.b = 92;
+		vx.a = 4;
+		voc.setVoxel(pos, vx);
+		// change the values
+		vx.r = 0;
+		vx.g = 0;
+		vx.b = 0;
+		vx.a = 0;
+		voc.getVoxel(pos, vx);
+		vx.r.should.equal(255);
+		vx.g.should.equal(128);
+		vx.b.should.equal(92);
+		vx.a.should.equal(4);
+	});
+	it("should support the depth parameter for getVoxel and setVoxel", function() {
+		voc = new Voctopus(3);
+		let vx = Object.create(voc.voxel);
+		vx.r = 255; vx.g = 128; vx.b = 92; vx.a = 4;
+		let pos = [0,0,0];
+		voc.setVoxel(pos, vx, 1);
+		voc.getVoxel(pos, undefined, 1).should.eql(vx);
+		voc.getVoxel([0,0,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([0,1,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([0,1,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,0,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,0,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,1,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,1,1], undefined, 1).should.eql(vx);
+	});
+	it("should fork a voxel when necessary", function() {
+		voc = new Voctopus(3);
+		let vx = Object.create(voc.voxel);
+		vx.r = 255; vx.g = 128; vx.b = 92; vx.a = 4;
+		let vx2 = Object.create(voc.voxel);
+		vx2.r = 255; vx2.g = 128; vx2.b = 92; vx2.a = 4;
+		let pos = [0,0,0];
+		voc.setVoxel(pos, vx, 1);
+		voc.setVoxel([0,0,3], vx2, 2);
+		voc.setVoxel([7,0,0], vx2, 3);
+		voc.getVoxel(pos, undefined, 1).should.eql(vx);
+		voc.getVoxel([0,0,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([0,1,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([0,1,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,0,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,0,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,1,0], undefined, 1).should.eql(vx);
+		voc.getVoxel([1,1,1], undefined, 1).should.eql(vx);
+		voc.getVoxel([0,0,3], undefined, 2).should.eql(vx2);
+		voc.getVoxel([7,0,0], undefined, 3).should.eql(vx2);
+	});
 	it("should write a full octet in one pass", function() {
 		var vec = Uint32Array.of(0,0,0);
 		var data = [];
@@ -293,7 +350,9 @@ describe("Voctopus", function() {
 		voc.getOctet(vec).should.eql(data);
 	});
 	xit("compute ray intersections", function() {
-		let data = [{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1},{m:1}];	
+		let vx = Object.create(voc.voxel);
+		vx.r = 255; vx.g = 128; vx.b = 92; vx.a = 4;
+		let data = [vx,vx,vx,vx,vx,vx,vx,vx];	
 		let cb = function(t, p) {
 			console.log(t);
 			console.log(p);
