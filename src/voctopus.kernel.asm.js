@@ -63,6 +63,10 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 			DBLC = 80,
 			DBLD = 88,
 			DBLE = 96;
+	var MASK_R = 0xff000000;
+	var MASK_G = 0x00ff0000;
+	var MASK_B = 0x0000ff00;
+	var MASK_A = 0x000000f0;
 
 	/**
 	 * The last bit of a value is a flag for a pointer, so this shifts a
@@ -193,8 +197,12 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 	 */
 	function rFrom(n) {
 		n = n|0;
+		// have to be tricky here because js will assume a 32-bit int (not uint)
+		return ((n >> 8) & MASK_G) >> 16;
+		/*
 		heap32[V_TMP>>2] = n;
 		return heap8[V_TMP|0+PO_R|0]|0;
+		*/
 	}
 
 	/**
@@ -204,8 +212,11 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 	 */
 	function gFrom(n) {
 		n = n|0;
+		return (n & MASK_G) >> 16;
+		/*
 		heap32[V_TMP>>2] = n;
 		return heap8[V_TMP|0+PO_G|0]|0;
+		*/
 	}
 
 	/**
@@ -215,8 +226,11 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 	 */
 	function bFrom(n) {
 		n = n|0;
+		return (n & MASK_B) >> 8;
+		/*
 		heap32[V_TMP>>2] = n;
 		return heap8[V_TMP|0+PO_B|0]|0;
+		*/
 	}
 
 	/**
@@ -226,8 +240,11 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 	 */
 	function aFrom(n) {
 		n = n|0;
+		return (n & MASK_A) >> 4;
+		/*
 		heap32[V_TMP>>2] = n;
 		return (heap8[V_TMP|0+PO_A|0] >> 4)|0;
+		*/
 	}
 
 	/**
@@ -299,11 +316,7 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 		g = g|0;
 		b = b|0;
 		a = a|0;
-		heap8[V_TMP|0+PO_R|0] = r;
-		heap8[V_TMP|0+PO_G|0] = g;
-		heap8[V_TMP|0+PO_B|0] = b;
-		heap8[V_TMP|0+PO_A|0] = (a & 63) << 4;
-		return (heap32[V_TMP>>2])|0;
+		return (r << 24) + (g << 16) + (b << 8) + ((a & 63) << 4);
 	}
 
 	/**
