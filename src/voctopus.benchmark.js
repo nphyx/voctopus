@@ -4,6 +4,17 @@ const loop3D = require("./voctopus.util.js").loop3D;
 // use a lot of globals because it has less impact on run time
 const testList = ["voxel", "direct", "octet"];
 var tmpvec = new Float32Array(3);
+var voc = new Voctopus(1);
+var tmpOctet = [
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel),
+	Object.create(voc.voxel)
+];
 /* Setup */
 const tests = {
 	voxel:{
@@ -23,21 +34,19 @@ const tests = {
 	octet:{
 		read: (voc, pos, out) => {
 			tmpvec[0] = pos[0]*2; tmpvec[1] = pos[1]*2; tmpvec[2] = pos[2]*2;
-			voc.getOctet(tmpvec, out);
+			voc.getOctet(tmpvec, undefined, out);
 		},
 		write:(voc, pos, i) => {
 			tmpvec[0] = pos[0]*2; tmpvec[1] = pos[1]*2; tmpvec[2] = pos[2]*2;
-			let data = [
-					{r:i+0,g:i+0,b:i+0,m:i+0},
-					{r:i+1,g:i+1,b:i+1,m:i+1},
-					{r:i+2,g:i+2,b:i+2,m:i+2},
-					{r:i+3,g:i+3,b:i+3,m:i+3},
-					{r:i+4,g:i+4,b:i+4,m:i+4},
-					{r:i+5,g:i+5,b:i+5,m:i+5},
-					{r:i+6,g:i+6,b:i+6,m:i+6},
-					{r:i+7,g:i+7,b:i+7,m:i+7}
-			];
-			voc.setOctet(tmpvec, data);
+			tmpOctet[0].r = tmpOctet[0].g = tmpOctet[0].b = tmpOctet[0].a = i+0;
+			tmpOctet[1].r = tmpOctet[1].g = tmpOctet[1].b = tmpOctet[1].a = i+1;
+			tmpOctet[2].r = tmpOctet[2].g = tmpOctet[2].b = tmpOctet[2].a = i+2;
+			tmpOctet[3].r = tmpOctet[3].g = tmpOctet[3].b = tmpOctet[3].a = i+3;
+			tmpOctet[4].r = tmpOctet[4].g = tmpOctet[4].b = tmpOctet[4].a = i+4;
+			tmpOctet[5].r = tmpOctet[5].g = tmpOctet[5].b = tmpOctet[5].a = i+5;
+			tmpOctet[6].r = tmpOctet[6].g = tmpOctet[6].b = tmpOctet[6].a = i+6;
+			tmpOctet[7].r = tmpOctet[7].g = tmpOctet[7].b = tmpOctet[7].a = i+7;
+			voc.setOctet(tmpvec, tmpOctet);
 		}
 	}
 }
