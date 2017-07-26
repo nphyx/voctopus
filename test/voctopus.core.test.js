@@ -349,7 +349,7 @@ describe("Voctopus", function() {
 		voc.setOctet(vec, data);
 		voc.getOctet(vec).should.eql(data);
 	});
-	xit("compute ray intersections", function() {
+	xit("should compute ray intersections", function() {
 		let vx = Object.create(voc.voxel);
 		vx.r = 255; vx.g = 128; vx.b = 92; vx.a = 4;
 		let data = [vx,vx,vx,vx,vx,vx,vx,vx];	
@@ -359,8 +359,8 @@ describe("Voctopus", function() {
 			return 1;
 		}
 		voc.setOctet([0,0,0], data, 0);
-		//voc.intersect([16,16,-32], [16,16,512], cb);
-		//voc.intersect([16,16,-16], [0.0,0.0,1.0], cb);
+		voc.intersect([16,16,-32], [16,16,512], cb);
+		voc.intersect([16,16,-16], [0.0,0.0,1.0], cb);
 		voc.intersect([16,16,-16], [0.0622573, 0.0622573, 0.996116], cb);
 	});
 });

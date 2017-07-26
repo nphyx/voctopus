@@ -47,7 +47,7 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 			V_TMP = 44, // tmp placeholder for a voxel
 			STEPA = 48, // var used in stepIntoTree
 			STEPB = 52, // var used in stepIntoTree 
-			TRAVA = 56, // var used in traverse
+			TRAVA = 56, // var used in seek
 			INITA = 60; // var used in initOctet
 	// heap for reading 8-bit values from voxels
 	var heap8 = new stdlib.Uint8Array(buffer);
@@ -368,7 +368,7 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 		return ((heap32[P_CUR>>2]|0) + (octantIdentity()|0))|0;
 	}
 
-	function traverse() {
+	function seek() {
 		/* jshint -W041:false */
 		heap32[TRAVA>>2] = 0|0;
 		while((heap32[D_CUR>>2]|0) < min((heap32[D_TGT>>2]|0), (heap32[D_MAX>>2]|0))) {
@@ -481,7 +481,7 @@ function VoctopusKernel32(stdlib, foreign, buffer) {
 		initOctet:initOctet,
 		octantIdentity:octantIdentity,
 		octantPointer:octantPointer,
-		traverse:traverse,
+		seek:seek,
 		step:step,
 		rayAABB:rayAABB
 	};

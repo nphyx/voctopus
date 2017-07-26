@@ -210,14 +210,14 @@ describe("the voctopus 32-bit kernel", function() {
 			p.should.eql(VK_FO+i*8);
 		}
 	});
-	it("should traverse the octree given a vector and target depth", function() {
+	it("should seek the octree given a vector and target depth", function() {
 		const {allocateOctet, valFromRGBA, prepareLookup, setP, setOctant, 
-		       traverse, rFrom, gFrom, bFrom, aFrom, getCurrentDepth} = vk;
+		       seek, rFrom, gFrom, bFrom, aFrom, getCurrentDepth} = vk;
 		let c = VK_FO, p = 0, res = 0;
 
-		// with deeper pointers unset, traverse should return after one iteration
+		// with deeper pointers unset, seek should return after one iteration
 		prepareLookup(31, 31, 31, 5);
-		res = traverse();
+		res = seek();
 		getCurrentDepth().should.eql(1);
 		res.should.eql(0);
 
@@ -232,14 +232,14 @@ describe("the voctopus 32-bit kernel", function() {
 		// full depth walk to target
 		for(let i = 1; i < 4; i++) {
 			prepareLookup(31,31,31,i);
-			res = traverse();
+			res = seek();
 			res.should.eql(VK_FO+VK_OS*i);
 			getCurrentDepth().should.eql(i);
 		}
 
 		// read octant at lowest depth
 		prepareLookup(31, 31, 31, 5);
-		res = traverse();
+		res = seek();
 		getCurrentDepth().should.eql(5);
 		rFrom(res).should.eql(244);
 		gFrom(res).should.eql(213);
@@ -247,7 +247,7 @@ describe("the voctopus 32-bit kernel", function() {
 		aFrom(res).should.eql(15);
 	});
 	it("should initialize an octet at a given depth", function() {
-		const {getCurrentDepth, traverse, prepareLookup, initOctet} = vk;
+		const {getCurrentDepth, seek, prepareLookup, initOctet} = vk;
 		let res = 0;
 		// do it one step at a time
 		for(let i = 0; i < 5; i++) {
@@ -261,7 +261,7 @@ describe("the voctopus 32-bit kernel", function() {
 		initOctet().should.eql(VK_FO+VK_OS*8);
 		for(let i = 1; i < 5; i++) {
 			prepareLookup(15,31,17,i);
-			res = traverse();
+			res = seek();
 			res.should.eql(start+VK_OS*i);
 			getCurrentDepth().should.eql(i);
 		}

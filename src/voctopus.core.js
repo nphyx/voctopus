@@ -211,7 +211,7 @@ export function Voctopus(depth) {
 	*/
 	this.getVoxel = function(v, out = create(this.voxel), d = this.depth) {
 		kernel.prepareLookup(v[0], v[1], v[2], d);
-		return this.get(kernel.traverse(), out);
+		return this.get(kernel.seek(), out);
 	}
 
 	/**
@@ -237,9 +237,9 @@ export function Voctopus(depth) {
 	* @param {int} depth depth to initialize at (default this.depth - 1)
 	* @return {int} index
 	*/
-	this.traverse = function(v, depth = this.depth) {
+	this.seek = function(v, depth = this.depth) {
 		kernel.prepareLookup(v[0], v[1], v[2], depth);
-		return kernel.traverse();
+		return kernel.seek();
 	}
 
 	/**
@@ -284,15 +284,16 @@ export function Voctopus(depth) {
 	* the octet. If the octet doesn't currently exist in the tree it will be initialized.
 	*
 	* @param {vector} v coordinates of voxel
-	* @param {depth} d depth to write at (default max depth)
+	* @param {octet} out (optional) a collection of 8 voxels to store output
+	* @param {depth} d (optional, default max depth) depth to write at
 	* @return {array} array of 8 voxels ordered by identity (@see voctopus/util#octetIdentity)
 	* @example
 	* let voc = new Voctopus(5, schemas.I8M16P);
 	* voc.getOctet([0,0,0], 3)
 	* 	.map((voxel) => console.log(voxel)); // {m:0} (x8)
 	*/
-	Voctopus.prototype.getOctet = function(v, d = this.depth, out = octet()) {
-		var p = this.traverse(v, d);
+	Voctopus.prototype.getOctet = function(v, out = octet(), d = this.depth) {
+		var p = this.seek(v, d);
 		const get = this.get.bind(this);
 		for(let i = 0; i < 8; ++i) {
 			get(p+i, out[i]);
