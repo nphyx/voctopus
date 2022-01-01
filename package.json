@@ -4,11 +4,23 @@
   "repository": "https://github.com/nphyx/voctopus",
   "description": "An experimental implementation of Sparse Voxel Octrees in javascript.",
   "author": "Justen Robertson <nphyxx@gmail.com>",
-  "main": "",
+  "main": "voctopus.js",
   "scripts": {
-    "doc": "jsdoc -c doc/conf.json -d doc"
+    "doc": "jsdoc -c doc/conf.json -d doc",
+    "build": "gulp",
+    "build:kernel": "gulp kernel",
+    "build:docs": "gulp docs",
+    "build:benchmark": "gulp benchmark",
+    "test": "gulp test",
+    "test:core": "test:core",
+    "test:util": "test:util",
+    "test:schema": "test:schema",
+    "test:kernel": "test:kernel",
+    "test:coverage": "test:coverage"
   },
-  "dependencies": {},
+  "dependencies": {
+    "browserify": "^17.0.0"
+  },
   "devDependencies": {
     "babel-core": "^6.0.0",
     "babel-loader": "^6.0.0",
@@ -19,10 +31,15 @@
     "gulp-inject-modules": "^0.1.1",
     "gulp-mocha": "^2.2.0",
     "gulp-rename": "^1.2.2",
+    "graceful-fs": "^4.2.4",
     "jsdox": "*",
     "jshint": "*",
     "mocha": "*",
     "should": "^11.2.0"
+  },
+  "engineStrict": true,
+  "engines": {
+    "node": ">=10.0.0"
   },
   "jshintConfig": {
     "curly": false,
